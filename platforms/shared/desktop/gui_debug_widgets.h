@@ -156,7 +156,7 @@ inline bool EditableRegister8(
     else
     {
         char value_str[16];
-        snprintf(value_str, sizeof(value_str), "$%02X", current_value);
+        snprintf(value_str, sizeof(value_str), "%02X", current_value);
 
         if (write_callback != nullptr)
         {
@@ -265,7 +265,7 @@ inline bool EditableRegister16(
     else
     {
         char value_str[16];
-        snprintf(value_str, sizeof(value_str), "$%04X", current_value);
+        snprintf(value_str, sizeof(value_str), "%04X", current_value);
 
         if (write_callback != nullptr)
         {
