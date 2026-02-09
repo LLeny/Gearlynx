@@ -103,7 +103,6 @@ void gui_debug_window_m6502(void)
     {
         ImGui::TableNextColumn();
         u8 p = cpu->P.GetValue();
-        ImGui::Text("  ");
         ImGui::SameLine(0, 0); ImGui::TextColored(orange, "N");
         ImGui::SameLine(); ImGui::TextColored(orange, "V");
         ImGui::SameLine(); ImGui::TextColored(orange, "-");
@@ -112,8 +111,7 @@ void gui_debug_window_m6502(void)
         ImGui::SameLine(); ImGui::TextColored(orange, "I");
         ImGui::SameLine(); ImGui::TextColored(orange, "Z");
         ImGui::SameLine(); ImGui::TextColored(orange, "C");
-        ImGui::Text("  ");
-        ImGui::SameLine(0, 0); EditableRegister1(M6502RegId_P, 7, (p >> 7) & 1, M6502WriteCallback1, cpu);
+        EditableRegister1(M6502RegId_P, 7, (p >> 7) & 1, M6502WriteCallback1, cpu);
         ImGui::SameLine(); EditableRegister1(M6502RegId_P, 6, (p >> 6) & 1, M6502WriteCallback1, cpu);
         ImGui::SameLine(); EditableRegister1(M6502RegId_P, 5, (p >> 5) & 1, nullptr, cpu, gray, gray);
         ImGui::SameLine(); EditableRegister1(M6502RegId_P, 4, (p >> 4) & 1, M6502WriteCallback1, cpu);
@@ -123,133 +121,34 @@ void gui_debug_window_m6502(void)
         ImGui::SameLine(); EditableRegister1(M6502RegId_P, 0, p & 1, M6502WriteCallback1, cpu);
 
         ImGui::TableNextColumn();
-        ImGui::TextColored(yellow, "     PC"); ImGui::SameLine();
-        ImGui::Text("  "); ImGui::SameLine(0, 0);
-        EditableRegister16(NULL, NULL, M6502RegId_PC, cpu->PC.GetValue(), M6502WriteCallback16, cpu, EditableRegisterFlags_None);
-        if (ImGui::IsItemClicked())
-            gui_debug_memory_goto(MEMORY_EDITOR_RAM, cpu->PC.GetValue());
-        ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED " " BYTE_TO_BINARY_PATTERN_SPACED " ", BYTE_TO_BINARY(cpu->PC.GetHigh()), BYTE_TO_BINARY(cpu->PC.GetLow()));
-        if (ImGui::IsItemClicked())
-            gui_debug_memory_goto(MEMORY_EDITOR_RAM, cpu->PC.GetValue());
-
-        ImGui::TableNextColumn();
-        ImGui::TextColored(yellow, "     SP"); ImGui::SameLine();
-        ImGui::Text("  "); ImGui::SameLine(0, 0);
-        EditableRegister16(NULL, NULL, M6502RegId_SP, STACK_ADDR | cpu->S.GetValue(), M6502WriteCallback16, cpu, EditableRegisterFlags_None);
-        if (ImGui::IsItemClicked())
-            gui_debug_memory_goto(MEMORY_EDITOR_STACK, STACK_ADDR | cpu->S.GetValue());
-        ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED " " BYTE_TO_BINARY_PATTERN_SPACED " ", BYTE_TO_BINARY(0x01), BYTE_TO_BINARY(cpu->S.GetValue()));
-        if (ImGui::IsItemClicked())
-            gui_debug_memory_goto(MEMORY_EDITOR_STACK, STACK_ADDR | cpu->S.GetValue());
-
-        ImGui::TableNextColumn();
 
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2.0f, 2.0f));
 
-        if (ImGui::BeginTable("regs", 2, ImGuiTableFlags_BordersInnerH |ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoPadOuterX))
+        if (ImGui::BeginTable("regs", 1, ImGuiTableFlags_BordersInnerV ))
         {
             ImGui::TableNextColumn();
             ImGui::BeginGroup();
-            ImGui::TextColored(cyan, "  A"); ImGui::SameLine();
-            ImGui::Text("  "); ImGui::SameLine(0, 0);
-            EditableRegister8(NULL, NULL, M6502RegId_A, cpu->A.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->A.GetValue()));
+            ImGui::TextColored(cyan, "A"); ImGui::SameLine();
+            EditableRegister8(NULL, NULL, M6502RegId_A, cpu->A.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None);  ImGui::SameLine();
+            ImGui::TextColored(gray, "" BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->A.GetValue())); ImGui::SameLine();
+            ImGui::TextColored(gray, "%u", cpu->A.GetValue());
             ImGui::EndGroup();
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::TextColored(cyan, "Hex: $%02X", cpu->A.GetValue());
-                ImGui::TextColored(cyan, "Dec: %u (%d)", cpu->A.GetValue(), (s8)cpu->A.GetValue());
-                ImGui::TextColored(cyan, "Bin: " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->A.GetValue()));
-                ImGui::TextColored(cyan, "Ascii: %c", (cpu->A.GetValue() >= 32 && cpu->A.GetValue() < 127) ? cpu->A.GetValue() : '.');
-                ImGui::EndTooltip();
-            }
 
             ImGui::TableNextColumn();
             ImGui::BeginGroup();
-            ImGui::TextColored(cyan, "  S"); ImGui::SameLine();
-            ImGui::Text("  "); ImGui::SameLine(0, 0);
-            EditableRegister8(NULL, NULL, M6502RegId_S, cpu->S.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->S.GetValue()));
+            ImGui::TextColored(cyan, "X"); ImGui::SameLine();
+            EditableRegister8(NULL, NULL, M6502RegId_X, cpu->X.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None); ImGui::SameLine();
+            ImGui::TextColored(gray, "" BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->X.GetValue())); ImGui::SameLine();
+            ImGui::TextColored(gray, "%u", cpu->X.GetValue());
             ImGui::EndGroup();
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::TextColored(cyan, "Hex: $%02X", cpu->S.GetValue());
-                ImGui::TextColored(cyan, "Dec: %u (%d)", cpu->S.GetValue(), (s8)cpu->S.GetValue());
-                ImGui::TextColored(cyan, "Bin: " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->S.GetValue()));
-                ImGui::TextColored(cyan, "Ascii: %c", (cpu->S.GetValue() >= 32 && cpu->S.GetValue() < 127) ? cpu->S.GetValue() : '.');
-                ImGui::EndTooltip();
-            }
 
             ImGui::TableNextColumn();
             ImGui::BeginGroup();
-            ImGui::TextColored(cyan, "  X"); ImGui::SameLine();
-            ImGui::Text("  "); ImGui::SameLine(0, 0);
-            EditableRegister8(NULL, NULL, M6502RegId_X, cpu->X.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->X.GetValue()));
+            ImGui::TextColored(cyan, "Y"); ImGui::SameLine();
+            EditableRegister8(NULL, NULL, M6502RegId_Y, cpu->Y.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None); ImGui::SameLine();
+            ImGui::TextColored(gray, "" BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->Y.GetValue())); ImGui::SameLine();
+            ImGui::TextColored(gray, "%u", cpu->Y.GetValue());
             ImGui::EndGroup();
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::TextColored(cyan, "Hex: $%02X", cpu->X.GetValue());
-                ImGui::TextColored(cyan, "Dec: %u (%d)", cpu->X.GetValue(), (s8)cpu->X.GetValue());
-                ImGui::TextColored(cyan, "Bin: " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->X.GetValue()));
-                ImGui::TextColored(cyan, "Ascii: %c", (cpu->X.GetValue() >= 32 && cpu->X.GetValue() < 127) ? cpu->X.GetValue() : '.');
-                ImGui::EndTooltip();
-            }
-
-            ImGui::TableNextColumn();
-            ImGui::BeginGroup();
-            ImGui::TextColored(cyan, "  Y"); ImGui::SameLine();
-            ImGui::Text("  "); ImGui::SameLine(0, 0);
-            EditableRegister8(NULL, NULL, M6502RegId_Y, cpu->Y.GetValue(), M6502WriteCallback8, cpu, EditableRegisterFlags_None);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->Y.GetValue()));
-            ImGui::EndGroup();
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::TextColored(cyan, "Hex: $%02X", cpu->Y.GetValue());
-                ImGui::TextColored(cyan, "Dec: %u (%d)", cpu->Y.GetValue(), (s8)cpu->Y.GetValue());
-                ImGui::TextColored(cyan, "Bin: " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(cpu->Y.GetValue()));
-                ImGui::TextColored(cyan, "Ascii: %c", (cpu->Y.GetValue() >= 32 && cpu->Y.GetValue() < 127) ? cpu->Y.GetValue() : '.');
-                ImGui::EndTooltip();
-            }
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(violet, "MAPCTL"); ImGui::SameLine();
-            EditableRegister8(NULL, NULL, 0xFFF9, mem->MAPCTL, MemoryWriteCallback8, memory, EditableRegisterFlags_None);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(mem->MAPCTL));
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(blue, "IRQPEN"); ImGui::SameLine();
-            ImGui::Text("$%02X", mikey->irq_pending);
-            ImGui::TextColored(gray, " " BYTE_TO_BINARY_PATTERN_SPACED, BYTE_TO_BINARY(mikey->irq_pending));
-
-            bool suzy_visible = !(mem->MAPCTL & 0x01);
-            bool mikey_visible = !(mem->MAPCTL & 0x02);
-            bool rom_visible = !(mem->MAPCTL & 0x04);
-            bool vectors_visible = !(mem->MAPCTL & 0x08);
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(violet, "SUZY  "); ImGui::SameLine();
-            ImGui::TextColored(suzy_visible ? green : gray, suzy_visible ? "ON" : "OFF");
-            ImGui::TextColored(brown, " FC00-FCFF");
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(violet, "MIKEY "); ImGui::SameLine();
-            ImGui::TextColored(mikey_visible ? green : gray, mikey_visible ? "ON" : "OFF");
-            ImGui::TextColored(brown, " FD00-FDFF");
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(violet, "ROM   "); ImGui::SameLine();
-            ImGui::TextColored(rom_visible ? green : gray, rom_visible ? "ON" : "OFF");
-            ImGui::TextColored(brown, " FE00-FFF7");
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(violet, "VECTOR"); ImGui::SameLine();
-            ImGui::TextColored(vectors_visible ? green : gray, vectors_visible ? "ON" : "OFF");
-            ImGui::TextColored(brown, " FFFA-FFFF");
 
             ImGui::EndTable();
         }
@@ -257,9 +156,22 @@ void gui_debug_window_m6502(void)
         ImGui::PopStyleVar();
 
         ImGui::TableNextColumn();
+        
+        ImGui::TextColored(yellow, "PC"); ImGui::SameLine();
+        EditableRegister16(NULL, NULL, M6502RegId_PC, cpu->PC.GetValue(), M6502WriteCallback16, cpu, EditableRegisterFlags_None);
+        if (ImGui::IsItemClicked())
+            gui_debug_memory_goto(MEMORY_EDITOR_RAM, cpu->PC.GetValue());
 
-        ImGui::TextColored(blue, " INTERRUPT ENABLE:");
-        ImGui::Text("  "); ImGui::SameLine(0, 0);
+        ImGui::SameLine();
+        ImGui::TextColored(yellow, " SP"); ImGui::SameLine();
+        EditableRegister16(NULL, NULL, M6502RegId_SP, STACK_ADDR | cpu->S.GetValue(), M6502WriteCallback16, cpu, EditableRegisterFlags_None);
+        if (ImGui::IsItemClicked())
+            gui_debug_memory_goto(MEMORY_EDITOR_STACK, STACK_ADDR | cpu->S.GetValue());
+
+        ImGui::TableNextColumn();
+
+        ImGui::TextColored(blue, "INTERRUPT ENABLE:");
+        ImGui::Text(" "); ImGui::SameLine(0, 0);
 
         for (int i = 0; i < 8; i++)
         {
@@ -272,8 +184,8 @@ void gui_debug_window_m6502(void)
 
         ImGui::TableNextColumn();
 
-        ImGui::TextColored(blue, " INTERRUPT PENDING:");
-        ImGui::Text("  "); ImGui::SameLine(0, 0);
+        ImGui::TextColored(blue, "INTERRUPT PENDING:");
+        ImGui::Text(" "); ImGui::SameLine(0, 0);
 
         for (int i = 0; i < 8; i++)
         {
@@ -283,7 +195,7 @@ void gui_debug_window_m6502(void)
 
         ImGui::TableNextColumn();
 
-        ImGui::TextColored(magenta, " IRQ LINE: "); ImGui::SameLine();
+        ImGui::TextColored(magenta, "IRQ LINE: "); ImGui::SameLine();
         ImGui::TextColored(cpu->irq_asserted ? green : gray, "ASSERTED");
 
         ImGui::EndTable();
