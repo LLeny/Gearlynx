@@ -17,28 +17,36 @@
  *
  */
 
-#ifndef SOUND_QUEUE_H
-#define SOUND_QUEUE_H
+#ifndef OGL_RENDERER_H
+#define OGL_RENDERER_H
 
-#include <SDL.h>
 #include <stdint.h>
-#include "gearlynx.h"
 
-#ifdef SOUND_QUEUE_IMPORT
+#ifdef OGL_RENDERER_IMPORT
     #define EXTERN
 #else
     #define EXTERN extern
 #endif
 
-EXTERN void sound_queue_init(void);
-EXTERN void sound_queue_destroy(void);
-EXTERN bool sound_queue_start(int sample_rate, int channel_count, int buffer_size = 2048, int buffer_count = 3);
-EXTERN void sound_queue_stop(void);
-EXTERN void sound_queue_write(s16* samples, int count, bool sync);
-EXTERN int sound_queue_get_sample_count(void);
-EXTERN s16* sound_queue_get_currently_playing(void);
-EXTERN bool sound_queue_is_open(void);
+#define FRAME_BUFFER_SCALE 4
+#define SYSTEM_TEXTURE_WIDTH 256
+#define SYSTEM_TEXTURE_HEIGHT 256
+#define FRAME_BUFFER_WIDTH 1024
+#define FRAME_BUFFER_HEIGHT 1024
+#define MAX_FRAME_HISTORY 8
 
-#undef SOUND_QUEUE_IMPORT
+EXTERN uint32_t ogl_renderer_emu_texture;
+EXTERN uint32_t ogl_renderer_emu_debug_framebuffer[4];
+EXTERN uint32_t ogl_renderer_emu_debug_huc6270_sprites[64];
+EXTERN uint32_t ogl_renderer_emu_savestates;
+EXTERN const char* ogl_renderer_opengl_version;
+
+EXTERN bool ogl_renderer_init(void);
+EXTERN void ogl_renderer_destroy(void);
+EXTERN void ogl_renderer_begin_render(void);
+EXTERN void ogl_renderer_render(void);
+EXTERN void ogl_renderer_end_render(void);
+
+#undef OGL_RENDERER_IMPORT
 #undef EXTERN
-#endif /* SOUND_QUEUE_H */
+#endif /* OGL_RENDERER_H */

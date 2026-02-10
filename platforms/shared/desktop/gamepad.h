@@ -17,36 +17,34 @@
  *
  */
 
-#ifndef RENDERER_H
-#define RENDERER_H
+#ifndef GAMEPAD_H
+#define GAMEPAD_H
 
-#include <stdint.h>
+#include <SDL.h>
 
-#ifdef RENDERER_IMPORT
+#ifdef GAMEPAD_IMPORT
     #define EXTERN
 #else
     #define EXTERN extern
 #endif
 
-#define FRAME_BUFFER_SCALE 4
-#define SYSTEM_TEXTURE_WIDTH 256
-#define SYSTEM_TEXTURE_HEIGHT 256
-#define FRAME_BUFFER_WIDTH 1024
-#define FRAME_BUFFER_HEIGHT 1024
-#define MAX_FRAME_HISTORY 8
+#define GAMEPAD_VBTN_AXIS_BASE 1000
+#define GAMEPAD_VBTN_AXIS_THRESHOLD 3000
+#define GAMEPAD_VBTN_L2 (GAMEPAD_VBTN_AXIS_BASE + SDL_CONTROLLER_AXIS_TRIGGERLEFT)
+#define GAMEPAD_VBTN_R2 (GAMEPAD_VBTN_AXIS_BASE + SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
 
-EXTERN uint32_t renderer_emu_texture;
-EXTERN uint32_t renderer_emu_debug_framebuffer[4];
-EXTERN uint32_t renderer_emu_debug_huc6270_sprites[64];
-EXTERN uint32_t renderer_emu_savestates;
-EXTERN const char* renderer_opengl_version;
+EXTERN SDL_GameController* gamepad_controller;
+EXTERN int gamepad_added_mappings;
+EXTERN int gamepad_updated_mappings;
 
-EXTERN bool renderer_init(void);
-EXTERN void renderer_destroy(void);
-EXTERN void renderer_begin_render(void);
-EXTERN void renderer_render(void);
-EXTERN void renderer_end_render(void);
+EXTERN bool gamepad_init(void);
+EXTERN void gamepad_destroy(void);
+EXTERN void gamepad_load_mappings(void);
+EXTERN void gamepad_add(void);
+EXTERN void gamepad_remove(SDL_JoystickID instance_id);
+EXTERN void gamepad_assign(int device_index);
+EXTERN void gamepad_check_shortcuts(void);
 
-#undef RENDERER_IMPORT
+#undef GAMEPAD_IMPORT
 #undef EXTERN
-#endif /* RENDERER_H */
+#endif /* GAMEPAD_H */

@@ -27,8 +27,9 @@
 #include "gui_debug_widgets.h"
 #include "config.h"
 #include "application.h"
+#include "gamepad.h"
 #include "emu.h"
-#include "renderer.h"
+#include "ogl_renderer.h"
 #include "utils.h"
 #include "gearlynx.h"
 
@@ -1110,8 +1111,8 @@ static void gamepad_device_selector(void)
     int num = SDL_NumJoysticks();
 
     SDL_JoystickID current_id = -1;
-    if (IsValidPointer(application_gamepad))
-        current_id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(application_gamepad));
+    if (IsValidPointer(gamepad_controller))
+        current_id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamepad_controller));
 
     int selected = 0;
 
@@ -1150,7 +1151,7 @@ static void gamepad_device_selector(void)
     if (ImGui::Combo("##device_player", &selected, items.c_str()))
     {
         int device_index = index_map[selected];
-        application_assign_gamepad(device_index);
+        gamepad_assign(device_index);
     }
 }
 
@@ -1175,7 +1176,7 @@ static void draw_savestate_slot_info(int slot)
         {
             float width = (float)emu_savestates_screenshots[slot].width;
             float height = (float)emu_savestates_screenshots[slot].height;
-            ImGui::Image((ImTextureID)(intptr_t)renderer_emu_savestates, ImVec2(width, height), ImVec2(0, 0), ImVec2(width / 256.0f, height / 256.0f));
+            ImGui::Image((ImTextureID)(intptr_t)ogl_renderer_emu_savestates, ImVec2(width, height), ImVec2(0, 0), ImVec2(width / 256.0f, height / 256.0f));
         }
     }
     else

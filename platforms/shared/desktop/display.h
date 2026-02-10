@@ -17,28 +17,28 @@
  *
  */
 
-#ifndef SOUND_QUEUE_H
-#define SOUND_QUEUE_H
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 #include <SDL.h>
-#include <stdint.h>
-#include "gearlynx.h"
 
-#ifdef SOUND_QUEUE_IMPORT
+#ifdef DISPLAY_IMPORT
     #define EXTERN
 #else
     #define EXTERN extern
 #endif
 
-EXTERN void sound_queue_init(void);
-EXTERN void sound_queue_destroy(void);
-EXTERN bool sound_queue_start(int sample_rate, int channel_count, int buffer_size = 2048, int buffer_count = 3);
-EXTERN void sound_queue_stop(void);
-EXTERN void sound_queue_write(s16* samples, int count, bool sync);
-EXTERN int sound_queue_get_sample_count(void);
-EXTERN s16* sound_queue_get_currently_playing(void);
-EXTERN bool sound_queue_is_open(void);
+EXTERN SDL_GLContext display_gl_context;
 
-#undef SOUND_QUEUE_IMPORT
+EXTERN void display_begin_frame(void);
+EXTERN void display_render(void);
+EXTERN void display_frame_throttle(void);
+EXTERN bool display_should_run_emu_frame(void);
+EXTERN bool display_should_use_vsync(void);
+EXTERN void display_update_vsync_state(void);
+EXTERN void display_update_frame_pacing(void);
+EXTERN void display_recreate_gl_context(void);
+
+#undef DISPLAY_IMPORT
 #undef EXTERN
-#endif /* SOUND_QUEUE_H */
+#endif /* DISPLAY_H */
