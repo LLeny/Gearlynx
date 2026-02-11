@@ -23,7 +23,6 @@
 #include "fonts/RobotoMedium.h"
 #include "fonts/MaterialIcons.h"
 #include "fonts/IconsMaterialDesign.h"
-#include "nfd.h"
 #include "config.h"
 #include "application.h"
 #include "emu.h"
@@ -44,8 +43,8 @@
 
 static bool status_message_active = false;
 static char status_message[4096] = "";
-static u32 status_message_start_time = 0;
-static u32 status_message_duration = 0;
+static Uint64 status_message_start_time = 0;
+static Uint64 status_message_duration = 0;
 static bool error_window_active = false;
 static char error_message[4096] = "";
 static void main_window(void);
@@ -60,12 +59,6 @@ bool gui_init(void)
     gui_main_window_width = 0;
     gui_main_window_height = 0;
 
-    if (NFD_Init() != NFD_OKAY)
-    {
-        Error("NFD Error: %s", NFD_GetError());
-        return false;
-    }
-
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
@@ -75,29 +68,28 @@ bool gui_init(void)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigDockingWithShift = true;
     io.IniFilename = config_imgui_file_path;
-    io.FontGlobalScale /= application_display_scale;
 
 #if defined(__APPLE__) || defined(_WIN32)
     if (config_debug.multi_viewport)
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 #endif
 
-    gui_roboto_font = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, 17.0f * application_display_scale, NULL, io.Fonts->GetGlyphRangesCyrillic());
+    gui_roboto_font = io.Fonts->AddFontFromMemoryCompressedTTF(RobotoMedium_compressed_data, RobotoMedium_compressed_size, 17.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
 
-    float iconFontSize = 20.0f * application_display_scale;
+    float iconFontSize = 20.0f;
     static const ImWchar icons_ranges[] = { ICON_MIN_MD, ICON_MAX_16_MD, 0 };
     ImFontConfig icons_config;
     icons_config.MergeMode = true;
     icons_config.PixelSnapH = true;
     icons_config.GlyphMinAdvanceX = iconFontSize;
-    icons_config.GlyphOffset = { 0.0f, 5.0f * application_display_scale };
+    icons_config.GlyphOffset = { 0.0f, 5.0f };
     gui_material_icons_font = io.Fonts->AddFontFromMemoryCompressedTTF(MaterialIcons_compressed_data, MaterialIcons_compressed_size, iconFontSize, &icons_config, icons_ranges);
 
     ImFontConfig font_cfg;
 
     for (int i = 0; i < 4; i++)
     {
-        font_cfg.SizePixels = (13.0f + (i * 3)) * application_display_scale;
+        font_cfg.SizePixels = (13.0f + (i * 3));
         gui_default_fonts[i] = io.Fonts->AddFontDefault(&font_cfg);
     }
 
@@ -133,7 +125,6 @@ void gui_destroy(void)
     gui_debug_destroy();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
-    NFD_Quit();
 }
 
 void gui_render(void)
@@ -365,7 +356,7 @@ void gui_load_bios(const char* path)
     gui_action_reset();
 }
 
-void gui_set_status_message(const char* message, u32 milliseconds)
+void gui_set_status_message(const char* message, Uint64 milliseconds)
 {
     if (config_emulator.status_messages)
     {
@@ -540,7 +531,7 @@ static void show_status_message(void)
 {
     if (status_message_active)
     {
-        u32 current_time = SDL_GetTicks();
+        Uint64 current_time = SDL_GetTicks();
         if ((current_time - status_message_start_time) > status_message_duration)
             status_message_active = false;
         else
