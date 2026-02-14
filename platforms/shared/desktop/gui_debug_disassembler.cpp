@@ -407,19 +407,6 @@ static void draw_breakpoints_content(void)
 
     ImGui::Separator();
 
-    for (int i = 0; i < 8; i++)
-    {
-        char irq[32];
-        snprintf(irq, 32, "IRQ %d   ", i);
-        ImGui::Checkbox(irq, &emu_debug_irq_breakpoints[i]);
-        if (i != 3 && i != 7)
-            ImGui::SameLine();
-    }
-
-    ImGui::Columns(2, "breakpoints");
-    ImGui::SetColumnOffset(1, 130);
-
-    ImGui::Separator();
 
     ImGui::PushItemWidth(85);
     if (ImGui::InputTextWithHint("##add_breakpoint", "XXXX-XXXX", new_breakpoint_buffer, IM_ARRAYSIZE(new_breakpoint_buffer), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
@@ -431,16 +418,17 @@ static void draw_breakpoints_content(void)
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Use hex XXXX format for single addresses or XXXX-XXXX for address ranges");
 
-    ImGui::Checkbox("Read", &new_breakpoint_read);
-    ImGui::Checkbox("Write", &new_breakpoint_write);
-    ImGui::Checkbox("Execute", &new_breakpoint_execute);
+    ImGui::SameLine(); ImGui::Checkbox("Read", &new_breakpoint_read);
+    ImGui::SameLine(); ImGui::Checkbox("Write", &new_breakpoint_write);
+    ImGui::SameLine(); ImGui::Checkbox("Execute", &new_breakpoint_execute);
 
+    ImGui::SameLine();
     if (ImGui::Button("Add##add", ImVec2(85, 0)))
     {
         add_breakpoint();
     }
 
-    ImGui::NextColumn();
+    ImGui::Separator();
 
     ImGui::BeginChild("breakpoints", ImVec2(0, 130), false);
     ImGui::PushFont(gui_default_font);
@@ -529,7 +517,6 @@ static void draw_breakpoints_content(void)
     }
 
     ImGui::EndChild();
-    ImGui::Columns(1);
     ImGui::Separator();
 }
 
@@ -1464,18 +1451,6 @@ static void disassembler_menu(void)
             gui_debug_toggle_breakpoint();
         }
 
-        ImGui::Separator();
-
-        if (ImGui::BeginMenu("IRQs"))
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                char irq[32];
-                snprintf(irq, 32, "Break on IRQ %d", i);
-                ImGui::MenuItem(irq, 0, &emu_debug_irq_breakpoints[i]);
-            }
-            ImGui::EndMenu();
-        }
 
         ImGui::Separator();
 
