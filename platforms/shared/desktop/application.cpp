@@ -23,6 +23,7 @@
 #include "gearlynx.h"
 #include "config.h"
 #include "gui.h"
+#include "gui_filedialogs.h"
 #include "gui_debug_disassembler.h"
 #include "ogl_renderer.h"
 #include "emu.h"
@@ -161,7 +162,7 @@ void application_destroy(void)
 
 void application_mainloop(void)
 {
-    Log("Starting main loop...");
+    Log("Running main loop...");
 
     while (running)
     {
@@ -287,8 +288,17 @@ static bool sdl_init(void)
     Log("Using SDL %d.%d.%d", application_sdl_version_major, application_sdl_version_minor, application_sdl_version_patch);
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, 32);
+    SDL_GL_SetAttribute(SDL_GL_FLOATBUFFERS, 0);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+#if defined(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE)
+    SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 0);
+#endif
 #if defined(__APPLE__)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -411,15 +421,18 @@ static void sdl_events(void)
 
     while (SDL_PollEvent(&event))
     {
+        bool file_dialog_active = gui_file_dialog_is_active();
+
         sdl_events_quit(&event);
 
         if (running)
         {
             sdl_events_app(&event);
 
-            ImGui_ImplSDL3_ProcessEvent(&event);
+            if (!file_dialog_active)
+                ImGui_ImplSDL3_ProcessEvent(&event);
 
-            if (!gui_in_use)
+            if (!gui_in_use && !file_dialog_active)
             {
                 events_emu(&event);
                 events_shortcuts(&event);

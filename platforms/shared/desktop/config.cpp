@@ -35,7 +35,7 @@ static void write_float(const char* group, const char* key, float value);
 static bool read_bool(const char* group, const char* key, bool default_value);
 static void write_bool(const char* group, const char* key, bool boolean);
 static std::string read_string(const char* group, const char* key);
-static void write_string(const char* group, const char* key, std::string value);
+static void write_string(const char* group, const char* key, const std::string& value);
 static config_Hotkey read_hotkey(const char* group, const char* key, config_Hotkey default_value);
 static void write_hotkey(const char* group, const char* key, config_Hotkey hotkey);
 static config_Hotkey make_hotkey(SDL_Scancode key, SDL_Keymod mod);
@@ -106,10 +106,20 @@ static void set_defaults(void)
 
 void config_init(void)
 {
+    const char* root_path = NULL;
+
     if (check_portable())
-        config_root_path = SDL_GetBasePath();
+        root_path = SDL_strdup(SDL_GetBasePath());
     else
-        config_root_path = SDL_GetPrefPath("Geardome", GLYNX_TITLE);
+        root_path = SDL_GetPrefPath("Geardome", GLYNX_TITLE);
+
+    if (root_path == NULL)
+    {
+        Log("Unable to determine config path. Falling back to current directory.");
+        root_path = SDL_strdup("./");
+    }
+
+    config_root_path = root_path;
 
     strncpy_fit(config_emu_file_path, config_root_path, sizeof(config_emu_file_path));
     strncat_fit(config_emu_file_path, "config.ini", sizeof(config_emu_file_path));
@@ -124,7 +134,8 @@ void config_init(void)
 
 void config_destroy(void)
 {
-    SafeDelete(config_ini_file)
+    SafeDelete(config_ini_file);
+    SDL_free((void*)config_root_path);
 }
 
 void config_load_defaults(void)
@@ -266,6 +277,7 @@ void config_read(void)
     for (int i = 0; i < 4; i++)
         config_audio.volume[i] = read_float("Audio", ("Channel" + std::to_string(i) + "Volume").c_str(), 1.0f);
     config_audio.lowpass_cutoff = read_int("Audio", "LowpassCutoff", 3000);
+    config_audio.buffer_count = read_int("Audio", "BufferCount", 3);
 
     config_input.key_left = (SDL_Scancode)read_int("Input", "KeyLeft", SDL_SCANCODE_LEFT);
     config_input.key_right = (SDL_Scancode)read_int("Input", "KeyRight", SDL_SCANCODE_RIGHT);
@@ -427,6 +439,7 @@ void config_write(void)
     for (int i = 0; i < 4; i++)
         write_float("Audio", ("Channel" + std::to_string(i) + "Volume").c_str(), config_audio.volume[i]);
     write_int("Audio", "LowpassCutoff", config_audio.lowpass_cutoff);
+    write_int("Audio", "BufferCount", config_audio.buffer_count);
 
     write_int("Input", "KeyLeft", config_input.key_left);
     write_int("Input", "KeyRight", config_input.key_right);
@@ -488,6 +501,10 @@ void config_write(void)
     {
         Debug("Settings saved");
     }
+    else
+    {
+        Error("Unable to save settings to %s", config_emu_file_path);
+    }
 }
 
 static bool check_portable(void)
@@ -496,9 +513,10 @@ static bool check_portable(void)
     char portable_file_path[260];
 
     base_path = SDL_GetBasePath();
+    if (base_path == NULL)
+        return false;
 
-    strcpy(portable_file_path, base_path);
-    strcat(portable_file_path, "portable.ini");
+    snprintf(portable_file_path, sizeof(portable_file_path), "%sportable.ini", base_path);
 
     FILE* file = fopen_utf8(portable_file_path, "r");
 
@@ -513,14 +531,16 @@ static bool check_portable(void)
 
 static int read_int(const char* group, const char* key, int default_value)
 {
-    int ret = 0;
+    int ret = default_value;
 
     std::string value = config_ini_data[group][key];
 
-    if(value.empty())
-        ret = default_value;
-    else
-        ret = std::stoi(value);
+    if (!value.empty())
+    {
+        std::istringstream iss(value);
+        if (!(iss >> ret))
+            ret = default_value;
+    }
 
     Debug("Load integer setting: [%s][%s]=%d", group, key, ret);
     return ret;
@@ -535,17 +555,15 @@ static void write_int(const char* group, const char* key, int integer)
 
 static float read_float(const char* group, const char* key, float default_value)
 {
-    float ret = 0.0f;
+    float ret = default_value;
 
     std::string value = config_ini_data[group][key];
 
-    if(value.empty())
-        ret = default_value;
-    else
+    if (!value.empty())
     {
-        std::istringstream iss(value);
-        iss.imbue(std::locale::classic());
-        if (!(iss >> ret))
+        std::istringstream converter(value);
+        converter.imbue(std::locale::classic());
+        if (!(converter >> ret))
             ret = default_value;
     }
 
@@ -559,20 +577,22 @@ static void write_float(const char* group, const char* key, float value)
     oss.imbue(std::locale::classic());
     oss << std::fixed << std::setprecision(2) << value;
     std::string value_str = oss.str();
-    config_ini_data[group][key] = oss.str();
+    config_ini_data[group][key] = value_str;
     Debug("Save float setting: [%s][%s]=%s", group, key, value_str.c_str());
 }
 
 static bool read_bool(const char* group, const char* key, bool default_value)
 {
-    bool ret;
+    bool ret = default_value;
 
     std::string value = config_ini_data[group][key];
 
-    if(value.empty())
-        ret = default_value;
-    else
-        std::istringstream(value) >> std::boolalpha >> ret;
+    if (!value.empty())
+    {
+        std::istringstream converter(value);
+        if (!(converter >> std::boolalpha >> ret))
+            ret = default_value;
+    }
 
     Debug("Load bool setting: [%s][%s]=%s", group, key, ret ? "true" : "false");
     return ret;
@@ -595,7 +615,7 @@ static std::string read_string(const char* group, const char* key)
     return ret;
 }
 
-static void write_string(const char* group, const char* key, std::string value)
+static void write_string(const char* group, const char* key, const std::string& value)
 {
     config_ini_data[group][key] = value;
     Debug("Save string setting: [%s][%s]=%s", group, key, value.c_str());
