@@ -118,6 +118,7 @@ public:
     json GetEepromStatus();
     json GetScreenshot();
     json GetFrameBuffer(const std::string& buffer_type);
+    json GetSprite(int index);
 
     // Media and state management
     json GetMediaInfo();
@@ -154,6 +155,7 @@ public:
     json ListMemoryWatches(int area);
     json MemorySearchCapture(int area);
     json MemorySearch(int area, const std::string& op, const std::string& compare_type, int compare_value, const std::string& data_type);
+    json MemoryFindBytes(int area, const std::string& hex_bytes);
 
     // Core access
     GearlynxCore* GetCore() { return m_core; }

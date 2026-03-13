@@ -30,19 +30,19 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="4"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-windows-x64.zip">Gearlynx-1.2.0-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-windows-x64.zip">Gearlynx-1.2.1-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-windows-arm64.zip">Gearlynx-1.2.0-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-windows-arm64.zip">Gearlynx-1.2.1-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-windows-x64.mcpb">Gearlynx-1.2.0-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-windows-x64.mcpb">Gearlynx-1.2.1-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-windows-arm64.mcpb">Gearlynx-1.2.0-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-windows-arm64.mcpb">Gearlynx-1.2.1-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>macOS</strong></td>
@@ -51,40 +51,40 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-macos-arm64.zip">Gearlynx-1.2.0-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-macos-arm64.zip">Gearlynx-1.2.1-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-macos-intel.zip">Gearlynx-1.2.0-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-macos-intel.zip">Gearlynx-1.2.1-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-macos-x64.mcpb">Gearlynx-1.2.0-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-macos-x64.mcpb">Gearlynx-1.2.1-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-macos-arm64.mcpb">Gearlynx-1.2.0-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-macos-arm64.mcpb">Gearlynx-1.2.1-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>Linux</strong></td>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.0-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.1-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.0-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.1-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.0-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.1-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-linux-x64.mcpb">Gearlynx-1.2.0-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-linux-x64.mcpb">Gearlynx-1.2.1-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.0/Gearlynx-1.2.0-mcpb-linux-arm64.mcpb">Gearlynx-1.2.0-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.1/Gearlynx-1.2.1-mcpb-linux-arm64.mcpb">Gearlynx-1.2.1-mcpb-linux-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td><strong>RetroArch</strong></td>
@@ -133,6 +133,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 ### Debugging Features
 - **Docking Windows**: In debug mode, you can dock windows together by pressing SHIFT and dragging a window onto another.
 - **Multi-viewport**: In Windows or macOS, you can enable "multi-viewport" in the debug menu. You must restart the emulator for the change to take effect. Once enabled, you can drag debugger windows outside the main window.
+- **Single Instance**: You can enable "Single Instance" in the ```Emulator``` menu. When enabled, opening a ROM while another instance is running will send the ROM to the running instance instead of starting a new one.
 - **Debug Symbols**: The emulator automatically tries to load a symbol file when loading a ROM. For example, for ```path_to_rom_file.rom``` it tries to load ```path_to_rom_file.sym```, ```path_to_rom_file.lbl``` and ```path_to_rom_file.noi```. You can also load symbol files using the GUI or the CLI. It supports *cc65* (VICE label file), *lyxass* (EQU) and *mads* (lab and hea) file formats.
 
 ### Command Line Usage

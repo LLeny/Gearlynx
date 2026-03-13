@@ -747,6 +747,22 @@ void McpServer::HandleToolsList(const json& request)
         }}
     });
 
+    tools.push_back({
+        {"name", "get_sprite"},
+        {"title", "Get Sprite"},
+        {"description", "Capture a rendered SCB sprite as base64-encoded PNG image. The emulator must be paused with an active SCB chain. Returns sprite image along with SCB properties (address, position, BPP, type, flip flags)."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"index", {
+                    {"type", "integer"},
+                    {"description", "Sprite index in the current SCB chain (0-based)"}
+                }}
+            }},
+            {"required", json::array({"index"})}
+        }}
+    });
+
     // Media and state management tools
     tools.push_back({
         {"name", "load_media"},
@@ -1241,6 +1257,26 @@ void McpServer::HandleToolsList(const json& request)
         }}
     });
 
+    tools.push_back({
+        {"name", "memory_find_bytes"},
+        {"title", "Find Byte Sequence in Memory"},
+        {"description", "Search memory for a consecutive hex byte sequence. Returns matching addresses."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"area", {
+                    {"type", "integer"},
+                    {"description", "Memory editor tab ID (use list_memory_areas)"}
+                }},
+                {"hex_bytes", {
+                    {"type", "string"},
+                    {"description", "Hex byte pairs to find, e.g. '04E5FF32' (spaces optional)"}
+                }}
+            }},
+            {"required", json::array({"area", "hex_bytes"})}
+        }}
+    });
+
     json response;
     response["jsonrpc"] = "2.0";
     response["id"] = id;
@@ -1717,6 +1753,11 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
         std::string buffer = arguments["buffer"];
         return m_debugAdapter.GetFrameBuffer(buffer);
     }
+    else if (normalizedTool == "get_sprite")
+    {
+        int index = arguments["index"];
+        return m_debugAdapter.GetSprite(index);
+    }
     // Media and state management
     else if (normalizedTool == "load_media")
     {
@@ -1905,6 +1946,12 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
         int compare_value = arguments.value("compare_value", 0);
         std::string data_type = arguments.value("data_type", "unsigned");
         return m_debugAdapter.MemorySearch(area, op, compare_type, compare_value, data_type);
+    }
+    else if (normalizedTool == "memory_find_bytes")
+    {
+        int area = arguments["area"];
+        std::string hex_bytes = arguments["hex_bytes"];
+        return m_debugAdapter.MemoryFindBytes(area, hex_bytes);
     }
     else
     {
