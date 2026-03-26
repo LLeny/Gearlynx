@@ -30,19 +30,19 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="4"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-windows-x64.zip">Gearlynx-1.2.2-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-windows-x64.zip">Gearlynx-1.2.4-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-windows-arm64.zip">Gearlynx-1.2.2-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-windows-arm64.zip">Gearlynx-1.2.4-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-windows-x64.mcpb">Gearlynx-1.2.2-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-windows-x64.mcpb">Gearlynx-1.2.4-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-windows-arm64.mcpb">Gearlynx-1.2.2-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-windows-arm64.mcpb">Gearlynx-1.2.4-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>macOS</strong></td>
@@ -51,40 +51,44 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-macos-arm64.zip">Gearlynx-1.2.2-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-macos-arm64.zip">Gearlynx-1.2.4-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-macos-intel.zip">Gearlynx-1.2.2-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-macos-intel.zip">Gearlynx-1.2.4-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-macos-x64.mcpb">Gearlynx-1.2.2-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-macos-x64.mcpb">Gearlynx-1.2.4-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-macos-arm64.mcpb">Gearlynx-1.2.2-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-macos-arm64.mcpb">Gearlynx-1.2.4-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
-      <td rowspan="5"><strong>Linux</strong></td>
+      <td rowspan="6"><strong>Linux</strong></td>
+      <td>Ubuntu PPA</td>
+      <td><a href="https://github.com/drhelius/ppa-geardome">drhelius/ppa-geardome</a></td>
+    </tr>
+    <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.2-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.4-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.2-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.4-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.2-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.4-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-linux-x64.mcpb">Gearlynx-1.2.2-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-linux-x64.mcpb">Gearlynx-1.2.4-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.2/Gearlynx-1.2.2-mcpb-linux-arm64.mcpb">Gearlynx-1.2.2-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-linux-arm64.mcpb">Gearlynx-1.2.4-mcpb-linux-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td><strong>RetroArch</strong></td>
@@ -150,6 +154,7 @@ Options:
       --mcp-stdio          Auto-start MCP server with stdio transport
       --mcp-http           Auto-start MCP server with HTTP transport
       --mcp-http-port N    HTTP port for MCP server (default: 7777)
+      --headless           Run without GUI (requires --mcp-stdio or --mcp-http)
   -v, --version            Display version information
   -h, --help               Display this help message
 ```
@@ -160,8 +165,19 @@ Gearlynx includes a [Model Context Protocol](https://modelcontextprotocol.io/int
 
 For complete setup instructions and tool documentation, see [MCP_README.md](MCP_README.md).
 
+### Agent Skills
+
+Gearlynx provides [Agent Skills](https://agentskills.io/) that teach AI assistants how to effectively use the emulator for specific tasks:
+
+- **[gearlynx-debugging](skills/gearlynx-debugging/SKILL.md)** — Game debugging, code tracing, breakpoint management, hardware inspection, and reverse engineering.
+- **[gearlynx-romhacking](skills/gearlynx-romhacking/SKILL.md)** — Cheat creation, memory searching, ROM data modification, text translation, and game patching.
+
+Install with `npx skills add drhelius/gearlynx`. See the [skills README](skills/README.md) for details.
+
 ## Hardware Tests
 - **Atari Lynx Hardware Test ROMs**: [https://github.com/drhelius/lynx-tests](https://github.com/drhelius/lynx-tests).
+<img width="500" src="https://github.com/user-attachments/assets/7b009bdd-725d-4518-b2c1-79ed3bc20784" />
+
 
 ## Build Instructions
 

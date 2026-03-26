@@ -1731,6 +1731,46 @@ json DebugAdapter::LoadMedia(const std::string& file_path)
     return result;
 }
 
+json DebugAdapter::LoadBios(const std::string& file_path)
+{
+    json result;
+
+    if (file_path.empty())
+    {
+        result["error"] = "File path is required";
+        Log("[MCP] LoadBios failed: File path is required");
+        return result;
+    }
+
+    GLYNX_Bios_State bios_result = emu_load_bios(file_path.c_str());
+
+    if (bios_result == BIOS_LOAD_FILE_ERROR)
+    {
+        result["error"] = "Failed to load BIOS file: file not found";
+        Log("[MCP] LoadBios failed: file not found: %s", file_path.c_str());
+        return result;
+    }
+    else if (bios_result == BIOS_LOAD_INVALID_SIZE)
+    {
+        result["error"] = "Failed to load BIOS file: must be exactly 512 bytes";
+        Log("[MCP] LoadBios failed: invalid size: %s", file_path.c_str());
+        return result;
+    }
+
+    result["success"] = true;
+    result["file_path"] = file_path;
+
+    if (bios_result == BIOS_LOAD_INVALID_CRC)
+    {
+        result["valid_crc"] = false;
+        result["warning"] = "CRC does not match original BIOS. Expected md5: fcd403db69f54290b51035d82f835e7b";
+    }
+    else
+        result["valid_crc"] = true;
+
+    return result;
+}
+
 json DebugAdapter::LoadSymbols(const std::string& file_path)
 {
     json result;
@@ -2769,4 +2809,197 @@ void DebugAdapter::AddRegister16(json& registers, std::ostringstream& ss, const 
     reg["value"] = ss.str();
     ss.str("");
     registers.push_back(reg);
+}
+
+json DebugAdapter::GetTraceLog(int start, int count)
+{
+    json result;
+
+    TraceLogger* tl = m_core->GetTraceLogger();
+    if (!tl)
+    {
+        result["error"] = "Trace logger not available";
+        return result;
+    }
+
+    u32 total = tl->GetCount();
+
+    if (count < 1) count = 100;
+    if (count > 1000) count = 1000;
+
+    u32 actual_start;
+    if (start < 0)
+        actual_start = (total > (u32)count) ? (total - (u32)count) : 0;
+    else
+        actual_start = (u32)start;
+
+    if (actual_start >= total)
+    {
+        result["total_entries"] = total;
+        result["start"] = actual_start;
+        result["count"] = 0;
+        result["lines"] = json::array();
+        return result;
+    }
+
+    u32 actual_count = (u32)count;
+    if (actual_start + actual_count > total)
+        actual_count = total - actual_start;
+
+    Memory* memory = m_core->GetMemory();
+
+    json lines = json::array();
+    for (u32 i = 0; i < actual_count; i++)
+    {
+        const GLYNX_Trace_Entry& entry = tl->GetEntry(actual_start + i);
+        char buf[256];
+
+        switch (entry.type)
+        {
+            case TRACE_CPU:
+            {
+                GLYNX_Disassembler_Record* record = memory->GetDisassemblerRecord(entry.cpu.pc);
+                char instr[64] = "???";
+                char bytes[10] = "";
+                if (IsValidPointer(record))
+                {
+                    snprintf(instr, sizeof(instr), "%s", record->name);
+                    char* p = instr;
+                    while (*p)
+                    {
+                        if (*p == '{')
+                        {
+                            char* end = strchr(p, '}');
+                            if (end)
+                                memmove(p, end + 1, strlen(end + 1) + 1);
+                            else
+                                break;
+                        }
+                        else
+                            p++;
+                    }
+                    snprintf(bytes, sizeof(bytes), "%s", record->bytes);
+                }
+                u8 p = entry.cpu.p;
+                snprintf(buf, sizeof(buf), "%04X  A:%02X X:%02X Y:%02X S:%02X  %c%c-%c%c%c%c%c  %-24s %s",
+                         entry.cpu.pc, entry.cpu.a, entry.cpu.x, entry.cpu.y, entry.cpu.s,
+                         (p & 0x80) ? 'N' : 'n', (p & 0x40) ? 'V' : 'v',
+                         (p & 0x10) ? 'B' : 'b', (p & 0x08) ? 'D' : 'd',
+                         (p & 0x04) ? 'I' : 'i', (p & 0x02) ? 'Z' : 'z',
+                         (p & 0x01) ? 'C' : 'c', instr, bytes);
+                break;
+            }
+            case TRACE_CPU_IRQ:
+                snprintf(buf, sizeof(buf), "  [CPU]  IRQ       PC:$%04X  Vector:$%04X  Mask:%02X",
+                         entry.irq.pc, entry.irq.vector, entry.irq.irq_mask);
+                break;
+            case TRACE_SUZY_MATH:
+                if (entry.math.completed)
+                    snprintf(buf, sizeof(buf), "  [SUZY] MATH      DONE");
+                else if (entry.math.is_divide)
+                    snprintf(buf, sizeof(buf), "  [SUZY] DIVIDE    $%04X%04X / $%04X = $%08X  R:$%04X%s",
+                             entry.math.op_a, entry.math.op_b & 0xFFFF, entry.math.op_b,
+                             entry.math.result, entry.math.remainder,
+                             entry.math.div_by_zero ? " [DIV0]" : "");
+                else
+                    snprintf(buf, sizeof(buf), "  [SUZY] MULTIPLY  $%04X * $%04X = $%08X%s%s",
+                             entry.math.op_a, entry.math.op_b, entry.math.result,
+                             entry.math.is_signed ? " [SIGN]" : "",
+                             entry.math.accumulate ? " [ACC]" : "");
+                break;
+            case TRACE_SUZY_SPRITE:
+                if (entry.sprite.is_start)
+                    snprintf(buf, sizeof(buf), "  [SUZY] SPRITES   START  SCB:$%04X", entry.sprite.scb_addr);
+                else if (entry.sprite.is_end)
+                    snprintf(buf, sizeof(buf), "  [SUZY] SPRITES   END  Cycles:%u", entry.sprite.total_cycles);
+                else if (entry.sprite.skipped)
+                    snprintf(buf, sizeof(buf), "  [SUZY]  SPRITE   SCB:$%04X  [SKIP]", entry.sprite.scb_addr);
+                else
+                {
+                    static const char* k_types[] = {"BG","BGNC","BSHD","BNDY","NORM","NCOL","XOR","SHDW"};
+                    snprintf(buf, sizeof(buf), "  [SUZY]  SPRITE   SCB:$%04X  Next:$%04X  (%d,%d)  %dBPP %s",
+                             entry.sprite.scb_addr, entry.sprite.scb_next,
+                             entry.sprite.hpos, entry.sprite.vpos,
+                             entry.sprite.bpp, k_types[entry.sprite.type & 7]);
+                }
+                break;
+            case TRACE_SUZY_INPUT:
+                snprintf(buf, sizeof(buf), "  [SUZY]  INPUT    %s:$%02X",
+                         entry.input.is_joystick ? "JOYSTICK" : "SWITCHES", entry.input.value);
+                break;
+            case TRACE_MIKEY_TIMER:
+                snprintf(buf, sizeof(buf), "  [MIKEY] TIMER %d  IRQ  Backup:$%02X",
+                         entry.timer.timer_id, entry.timer.backup);
+                break;
+            case TRACE_MIKEY_UART:
+                snprintf(buf, sizeof(buf), "  [MIKEY] UART %s  Data:$%02X%s",
+                         entry.uart.is_tx ? "TX" : "RX", entry.uart.data,
+                         (!entry.uart.is_tx && entry.uart.flags) ? "  [ERR]" : "");
+                break;
+            case TRACE_MIKEY_AUDIO:
+            {
+                static const char* k_audio_regs[] = {"VOL","FDBK","OUT","LFSR","BKUP","CTL","CNT","MISC"};
+                snprintf(buf, sizeof(buf), "  [MIKEY] AUDIO %d  %s=$%02X",
+                         entry.audio.channel, k_audio_regs[entry.audio.reg & 7], entry.audio.value);
+                break;
+            }
+            case TRACE_CART_SHIFT:
+                snprintf(buf, sizeof(buf), "  [CART]  SHIFT    Addr:$%02X  Bit:%d",
+                         entry.cart.addr_shift, entry.cart.bit);
+                break;
+            default:
+                snprintf(buf, sizeof(buf), "  [???]");
+                break;
+        }
+
+        lines.push_back(buf);
+    }
+
+    result["total_entries"] = total;
+    result["start"] = actual_start;
+    result["count"] = actual_count;
+    result["lines"] = lines;
+    return result;
+}
+
+json DebugAdapter::SetTraceLog(bool enabled, u32 flags)
+{
+    json result;
+
+    TraceLogger* tl = m_core->GetTraceLogger();
+    if (!tl)
+    {
+        result["error"] = "Trace logger not available";
+        return result;
+    }
+
+    if (enabled)
+    {
+        if (flags == 0)
+            flags = TRACE_FLAG_CPU;
+        tl->SetEnabledFlags(flags);
+
+        result["status"] = "started";
+        result["enabled_flags"] = flags;
+
+        json enabled_list = json::array();
+        if (flags & TRACE_FLAG_CPU) enabled_list.push_back("cpu");
+        if (flags & TRACE_FLAG_CPU_IRQ) enabled_list.push_back("cpu_irq");
+        if (flags & TRACE_FLAG_SUZY_MATH) enabled_list.push_back("suzy_math");
+        if (flags & TRACE_FLAG_SUZY_SPRITE) enabled_list.push_back("suzy_sprites");
+        if (flags & TRACE_FLAG_SUZY_INPUT) enabled_list.push_back("suzy_input");
+        if (flags & TRACE_FLAG_MIKEY_TIMER) enabled_list.push_back("mikey_timers");
+        if (flags & TRACE_FLAG_MIKEY_UART) enabled_list.push_back("mikey_uart");
+        if (flags & TRACE_FLAG_MIKEY_AUDIO) enabled_list.push_back("mikey_audio");
+        if (flags & TRACE_FLAG_CART_SHIFT) enabled_list.push_back("cart");
+        result["enabled"] = enabled_list;
+    }
+    else
+    {
+        tl->SetEnabledFlags(0);
+        result["status"] = "stopped";
+    }
+
+    result["total_entries"] = tl->GetCount();
+    return result;
 }

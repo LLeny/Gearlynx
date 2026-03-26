@@ -79,6 +79,9 @@
     <ClInclude Include="..\shared\desktop\application.h">
       <Filter>desktop</Filter>
     </ClInclude>
+    <ClInclude Include="..\shared\desktop\application_headless.h">
+      <Filter>desktop</Filter>
+    </ClInclude>
     <ClInclude Include="..\shared\desktop\events.h">
       <Filter>desktop</Filter>
     </ClInclude>
@@ -298,6 +301,9 @@
     <ClInclude Include="..\..\src\vgm_recorder.h">
       <Filter>core</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\trace_logger.h">
+      <Filter>core</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\types.h">
       <Filter>core</Filter>
     </ClInclude>
@@ -349,6 +355,9 @@
       <Filter>desktop\imgui</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\desktop\application.cpp">
+      <Filter>desktop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\desktop\application_headless.cpp">
       <Filter>desktop</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\desktop\events.cpp">
@@ -475,6 +484,9 @@
       <Filter>core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\vgm_recorder.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\trace_logger.cpp">
       <Filter>core</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\desktop\mcp\mcp_debug_adapter.cpp">

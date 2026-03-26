@@ -196,6 +196,12 @@ void emu_update(void)
     {
         sound_queue_write(audio_buffer, sampleCount, emu_audio_sync);
     }
+    else if (core->IsPaused())
+    {
+        int silence_count = GLYNX_AUDIO_QUEUE_SIZE;
+        memset(audio_buffer, 0, silence_count * sizeof(s16));
+        sound_queue_write(audio_buffer, silence_count, false);
+    }
 }
 
 void emu_key_pressed(GLYNX_Keys key)
@@ -528,11 +534,6 @@ void emu_debug_continue(void)
     emu_debug_command = Debug_Command_Continue;
 }
 
-void emu_debug_set_callback(GearlynxCore::GLYNX_Debug_Callback callback)
-{
-    core->SetDebugCallback(callback);
-}
-
 void emu_save_screenshot(const char* file_path)
 {
     if (!core->GetMedia()->IsReady())
@@ -704,9 +705,10 @@ static void update_debug(void)
     if (config_debug.show_frame_buffers || config_debug.show_scb_viewer)
         update_debug_framebuffers();
 
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
     bool accumulate = config_debug.show_scb_viewer && config_debug.scb_viewer_mode == 1;
-
     core->GetSuzy()->SetSCBAccumulationEnabled(accumulate);
+#endif
 
     if (config_debug.show_scb_viewer)
     {

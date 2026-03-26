@@ -14,6 +14,7 @@ This server provides tools for game development, rom hacking, reverse engineerin
 - **Symbol Support**: Add, remove, load, and list debug symbols
 - **Bookmarks**: Memory and disassembler bookmarks for navigation
 - **Call Stack**: View function call hierarchy
+- **Trace Logger**: CPU instruction trace with interleaved hardware events (Suzy math/sprites, Mikey timers/audio/UART, cart)
 - **Screenshot Capture**: Get current frame as PNG image
 - **Documentation Resources**: Built-in hardware and programming documentation for AI context
 - **GUI Integration**: MCP server runs alongside the emulator GUI, sharing the same state
@@ -29,6 +30,10 @@ The default mode uses standard input/output for communication. The emulator is l
 ### HTTP Transport
 
 The HTTP transport mode runs the emulator with an embedded web server on `localhost:7777/mcp`. The emulator stays running independently while the AI client connects via HTTP.
+
+### Headless Mode
+
+Add `--headless` to run without a GUI window. This is useful for servers, CLI agents, or any machine without a display. All MCP tools work identically in headless mode. Requires `--mcp-stdio` or `--mcp-http`.
 
 ## Quick Start
 
@@ -243,6 +248,8 @@ The server exposes tools organized in the following categories:
 - `remove_disassembler_bookmark` - Remove disassembler bookmark
 - `list_disassembler_bookmarks` - List all disassembler bookmarks
 - `get_call_stack` - View function call hierarchy
+- `get_trace_log` - Read trace logger entries (CPU + hardware events). Use set_trace_log to start/stop the logger
+- `set_trace_log` - Start or stop the trace logger. Records CPU instructions and hardware events into a ring buffer. Filter event types with optional booleans
 
 ### Breakpoints
 - `set_breakpoint` - Set execution, read, or write breakpoint at address. Read/write breakpoints stop with PC at instruction after memory access
@@ -272,6 +279,7 @@ The server exposes tools organized in the following categories:
 ### Media & State Management
 - `get_media_info` - Get loaded ROM info (file path, type, size, CRC, rotation, EEPROM, BIOS status)
 - `load_media` - Load ROM file (.lnx, .lyx, .o, .zip). Automatically loads symbol file if present (.sym, .lbl, .noi)
+- `load_bios` - Load BIOS file (must be exactly 512 bytes).
 - `list_save_state_slots` - List all 5 save state slots with information (rom name, timestamp, screenshot availability)
 - `select_save_state_slot` - Select active save state slot (1-5) for save/load operations
 - `save_state` - Save emulator state to currently selected slot
