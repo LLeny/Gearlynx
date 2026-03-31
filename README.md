@@ -28,67 +28,48 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
   </thead>
   <tbody>
     <tr>
-      <td rowspan="4"><strong>Windows</strong></td>
+      <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-windows-x64.zip">Gearlynx-1.2.4-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-windows-x64.zip">Gearlynx-1.2.5-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-windows-arm64.zip">Gearlynx-1.2.4-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-windows-arm64.zip">Gearlynx-1.2.5-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
-      <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-windows-x64.mcpb">Gearlynx-1.2.4-mcpb-windows-x64.mcpb</a></td>
-    </tr>
-    <tr>
-      <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-windows-arm64.mcpb">Gearlynx-1.2.4-mcpb-windows-arm64.mcpb</a></td>
-    </tr>
-    <tr>
-      <td rowspan="5"><strong>macOS</strong></td>
+      <td rowspan="3"><strong>macOS</strong></td>
       <td>Homebrew</td>
       <td><code>brew install --cask drhelius/geardome/gearlynx</code></td>
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-macos-arm64.zip">Gearlynx-1.2.4-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-macos-arm64.zip">Gearlynx-1.2.5-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-macos-intel.zip">Gearlynx-1.2.4-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-macos-intel.zip">Gearlynx-1.2.5-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
-      <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-macos-x64.mcpb">Gearlynx-1.2.4-mcpb-macos-x64.mcpb</a></td>
-    </tr>
-    <tr>
-      <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-macos-arm64.mcpb">Gearlynx-1.2.4-mcpb-macos-arm64.mcpb</a></td>
-    </tr>
-    <tr>
-      <td rowspan="6"><strong>Linux</strong></td>
+      <td rowspan="4"><strong>Linux</strong></td>
       <td>Ubuntu PPA</td>
       <td><a href="https://github.com/drhelius/ppa-geardome">drhelius/ppa-geardome</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.4-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.5-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.4-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.5-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.4-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.5-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
-      <td>MCPB x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-linux-x64.mcpb">Gearlynx-1.2.4-mcpb-linux-x64.mcpb</a></td>
-    </tr>
-    <tr>
-      <td>MCPB ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.4/Gearlynx-1.2.4-mcpb-linux-arm64.mcpb">Gearlynx-1.2.4-mcpb-linux-arm64.mcpb</a></td>
+      <td><strong>MCPB</strong></td>
+      <td>All platforms</td>
+      <td><a href="MCP_README.md">MCP Readme</a></td>
     </tr>
     <tr>
       <td><strong>RetroArch</strong></td>
@@ -207,7 +188,7 @@ make dist
 If you are using Ubuntu 25.04 or later, you can install SDL3 directly. Use the following commands to build:
 
 ``` shell
-sudo apt install build-essential libsdl3-dev libgtk-3-dev
+sudo apt install build-essential libsdl3-dev
 cd platforms/linux
 make
 ```
@@ -215,10 +196,10 @@ make
 For older Ubuntu versions (22.04, 24.04), you need to build SDL3 from source first. Use the following commands to build both SDL3 and Gearlynx:
 
 ``` shell
-sudo apt install build-essential cmake libgtk-3-dev \
+sudo apt install build-essential cmake \
   libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
   libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
-  libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev
+  libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev libxtst-dev
 SDL3_TAG=$(curl -s https://api.github.com/repos/libsdl-org/SDL/releases/latest | jq -r '.tag_name')
 git clone --depth 1 --branch "$SDL3_TAG" https://github.com/libsdl-org/SDL.git /tmp/SDL3
 cmake -S /tmp/SDL3 -B /tmp/SDL3/build -DCMAKE_INSTALL_PREFIX=/usr -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
@@ -231,7 +212,7 @@ make
 - Fedora:
 
 ``` shell
-sudo dnf install @development-tools gcc-c++ SDL3-devel gtk3-devel
+sudo dnf install @development-tools gcc-c++ SDL3-devel
 cd platforms/linux
 make
 ```
@@ -239,7 +220,7 @@ make
 - Arch Linux:
 
 ``` shell
-sudo pacman -S base-devel sdl3 gtk3
+sudo pacman -S base-devel sdl3
 cd platforms/linux
 make
 ```
@@ -249,7 +230,7 @@ make
 - FreeBSD:
 
 ``` shell
-su root -c "pkg install -y git gmake pkgconf SDL3 lang/gcc gtk3"
+su root -c "pkg install -y git gmake pkgconf SDL3 lang/gcc"
 cd platforms/bsd
 gmake
 ```
@@ -257,7 +238,7 @@ gmake
 - NetBSD:
 
 ``` shell
-su root -c "pkgin install gmake pkgconf SDL3 lang/gcc gtk3"
+su root -c "pkgin install gmake pkgconf SDL3 lang/gcc"
 cd platforms/bsd
 gmake
 ```

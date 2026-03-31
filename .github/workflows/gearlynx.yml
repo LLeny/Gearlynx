@@ -42,10 +42,10 @@ jobs:
       run: sudo apt-get update -qq
     - name: Install dependencies
       run: |
-        sudo apt-get install -y build-essential cmake libgtk-3-dev \
+        sudo apt-get install -y build-essential cmake \
         libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
         libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
-        libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev
+        libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev libxtst-dev
     - name: Build and install SDL3
       env:
         GH_TOKEN: ${{ github.token }}
@@ -70,7 +70,7 @@ jobs:
         cp platforms/linux/${{ env.NAME_LOWER }} artifact
         cp -r platforms/shared/desktop/mcp/resources artifact/mcp/
     - name: Archive binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-desktop-${{ matrix.artifact_name }}
         path: artifact/*
@@ -88,10 +88,10 @@ jobs:
       run: sudo apt-get update -qq
     - name: Install dependencies
       run: |
-        sudo apt-get install -y build-essential cmake libgtk-3-dev \
+        sudo apt-get install -y build-essential cmake \
         libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
         libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
-        libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev
+        libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev libudev-dev libxtst-dev
     - name: Build and install SDL3
       env:
         GH_TOKEN: ${{ github.token }}
@@ -128,7 +128,7 @@ jobs:
       run: make
       working-directory: platforms/libretro
     - name: Archive binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-libretro-linux-x64
         path: platforms/libretro/${{ env.NAME_LOWER }}_libretro.so
@@ -201,7 +201,7 @@ jobs:
         ditto -c -k --keepParent "platforms/macos/${{ env.NAME_UPPER }}.app" "platforms/macos/${{ env.NAME_UPPER }}.app.zip"
         mv platforms/macos/${{ env.NAME_UPPER }}.app.zip artifact/
     - name: Archive binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-desktop-macos-${{ matrix.architecture == 'arm' && 'arm64' || 'intel' }}
         path: artifact/*
@@ -248,7 +248,7 @@ jobs:
         cp platforms/windows/release/${{ env.NAME_UPPER }}.exe artifact
         cp -r platforms/shared/desktop/mcp/resources artifact/mcp/
     - name: Archive binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-desktop-windows-${{ matrix.architecture }}
         path: artifact/*
@@ -271,7 +271,7 @@ jobs:
       uses: vmactions/freebsd-vm@v1
       with:
         usesh: true
-        prepare: pkg install -y git gmake pkgconf sdl3 lang/gcc gtk3
+        prepare: pkg install -y git gmake pkgconf sdl3 lang/gcc
         run: |
           cd platforms/bsd
           gmake
@@ -283,7 +283,7 @@ jobs:
         cp platforms/bsd/${{ env.NAME_LOWER }} artifact
         cp -r platforms/shared/desktop/mcp/resources artifact/mcp/
     - name: Archive binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-desktop-bsd-x64
         path: artifact/*
@@ -369,7 +369,7 @@ jobs:
         fi
         zip -r ../${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-mcpb-${PLATFORM_NAME}-${{ matrix.variant.arch }}.mcpb *
     - name: Archive MCPB
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-mcpb-${{ matrix.variant.platform == 'darwin' && 'macos' || matrix.variant.platform == 'win32' && 'windows' || matrix.variant.platform }}-${{ matrix.variant.arch }}
         path: ${{ env.NAME_UPPER }}-${{ env.BUILD_NUMBER }}-mcpb-${{ matrix.variant.platform == 'darwin' && 'macos' || matrix.variant.platform == 'win32' && 'windows' || matrix.variant.platform }}-${{ matrix.variant.arch }}.mcpb
