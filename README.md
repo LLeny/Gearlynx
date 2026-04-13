@@ -30,11 +30,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-windows-x64.zip">Gearlynx-1.2.5-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-windows-x64.zip">Gearlynx-1.2.6-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-windows-arm64.zip">Gearlynx-1.2.5-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-windows-arm64.zip">Gearlynx-1.2.6-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td rowspan="3"><strong>macOS</strong></td>
@@ -43,11 +43,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-macos-arm64.zip">Gearlynx-1.2.5-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-macos-arm64.zip">Gearlynx-1.2.6-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-macos-intel.zip">Gearlynx-1.2.5-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-macos-intel.zip">Gearlynx-1.2.6-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td rowspan="4"><strong>Linux</strong></td>
@@ -56,15 +56,15 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.5-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.6-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.5-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.6-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.5/Gearlynx-1.2.5-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.5-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.6/Gearlynx-1.2.6-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.6-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td><strong>MCPB</strong></td>
@@ -230,17 +230,25 @@ make
 - FreeBSD:
 
 ``` shell
-su root -c "pkg install -y git gmake pkgconf SDL3 lang/gcc"
+su root -c "pkg install -y git gmake pkgconf sdl3"
 cd platforms/bsd
-gmake
+USE_CLANG=1 gmake
 ```
 
 - NetBSD:
 
 ``` shell
-su root -c "pkgin install gmake pkgconf SDL3 lang/gcc"
+su root -c "pkgin install gmake pkgconf SDL3"
 cd platforms/bsd
 gmake
+```
+
+- OpenBSD
+
+``` shell
+doas pkg_add gmake sdl3
+cd platforms/bsd
+LDFLAGS=-L/usr/X11R6/lib/ USE_CLANG=1 gmake
 ```
 
 ### Libretro
