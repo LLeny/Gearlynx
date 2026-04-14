@@ -19,6 +19,9 @@
 #define EMU_IMPORT
 #include "emu.h"
 
+#include <algorithm>
+#include <vector>
+
 #include "gearlynx.h"
 #include "sound_queue.h"
 #include "config.h"
@@ -34,6 +37,18 @@ static GearlynxCore* core;
 static s16* audio_buffer;
 static bool audio_enabled;
 static McpManager* mcp_manager;
+
+struct RewindFrame
+{
+    std::vector<u8> state;
+    std::vector<u8> framebuffer;
+    u64 frame_number;
+};
+
+static std::vector<RewindFrame> rewind_buffer;
+static int rewind_target_offset = 0;
+static int rewind_preview_index = -1;
+static u64 rewind_frame_counter = 0;
 
 static void save_ram(void);
 static void load_ram(void);
@@ -96,6 +111,173 @@ bool emu_init(void)
     return true;
 }
 
+static void rewind_clear_buffer()
+{
+    rewind_buffer.clear();
+    rewind_target_offset = 0;
+    rewind_preview_index = -1;
+    rewind_frame_counter = 0;
+}
+
+static void rewind_trim_buffer()
+{
+    int max_frames = config_emulator.rewind_buffer_length;
+    if (max_frames < 1)
+        max_frames = 1;
+
+    while ((int)rewind_buffer.size() > max_frames)
+        rewind_buffer.erase(rewind_buffer.begin());
+
+    if (rewind_target_offset >= (int)rewind_buffer.size())
+        rewind_target_offset = (int)rewind_buffer.size() - 1;
+    if (rewind_target_offset < 0)
+        rewind_target_offset = 0;
+}
+
+static bool rewind_save_frame()
+{
+    if (!config_emulator.rewind_enabled || emu_is_empty() || core->IsPaused())
+        return false;
+
+    if ((rewind_preview_index >= 0) && (rewind_preview_index < (int)rewind_buffer.size() - 1))
+    {
+        rewind_buffer.erase(rewind_buffer.begin() + rewind_preview_index + 1, rewind_buffer.end());
+        rewind_target_offset = 0;
+        rewind_preview_index = -1;
+    }
+
+    size_t size = 0;
+    if (!core->SaveState(NULL, size, false))
+        return false;
+
+    RewindFrame frame;
+    frame.state.resize(size);
+
+    if (!core->SaveState(frame.state.data(), size, false))
+        return false;
+
+    frame.state.resize(size);
+    
+    frame.framebuffer.resize(256 * 256 * 4);
+    memcpy(frame.framebuffer.data(), emu_frame_buffer, 256 * 256 * 4);
+    
+    frame.frame_number = ++rewind_frame_counter;
+    rewind_buffer.push_back(std::move(frame));
+    rewind_trim_buffer();
+    rewind_target_offset = 0;
+    rewind_preview_index = -1;
+    return true;
+}
+
+static bool rewind_preview_target(int offset)
+{
+    if (rewind_buffer.empty())
+        return false;
+
+    if (offset < 0)
+        offset = 0;
+    if (offset >= (int)rewind_buffer.size())
+        offset = (int)rewind_buffer.size() - 1;
+
+    int index = (int)rewind_buffer.size() - 1 - offset;
+    if (index < 0 || index >= (int)rewind_buffer.size())
+        return false;
+
+    RewindFrame& frame = rewind_buffer[index];
+    if (!core->LoadState(frame.state.data(), frame.state.size()))
+        return false;
+    
+    if (frame.framebuffer.size() == (256 * 256 * 4))
+    {
+        memcpy(emu_frame_buffer, frame.framebuffer.data(), 256 * 256 * 4);
+    }
+
+    emu_pause();
+    rewind_preview_index = index;
+    rewind_target_offset = offset;
+    return true;
+}
+
+static bool rewind_restore_target()
+{
+    if (rewind_buffer.empty())
+        return false;
+
+    if (rewind_target_offset < 0)
+        rewind_target_offset = 0;
+    if (rewind_target_offset >= (int)rewind_buffer.size())
+        rewind_target_offset = (int)rewind_buffer.size() - 1;
+
+    int index = (int)rewind_buffer.size() - 1 - rewind_target_offset;
+    if (index < 0 || index >= (int)rewind_buffer.size())
+        return false;
+
+    RewindFrame& frame = rewind_buffer[index];
+    if (!core->LoadState(frame.state.data(), frame.state.size()))
+        return false;
+
+    emu_pause();
+    rewind_buffer.erase(rewind_buffer.begin() + index + 1, rewind_buffer.end());
+    rewind_target_offset = 0;
+    return true;
+}
+
+bool emu_is_rewind_enabled(void)
+{
+    return config_emulator.rewind_enabled;
+}
+
+bool emu_preview_rewind_target(int offset)
+{
+    return rewind_preview_target(offset);
+}
+
+int emu_get_rewind_buffer_capacity(void)
+{
+    return config_emulator.rewind_buffer_length;
+}
+
+int emu_get_rewind_frame_count(void)
+{
+    return (int)rewind_buffer.size();
+}
+
+int emu_get_rewind_target_offset(void)
+{
+    return rewind_target_offset;
+}
+
+void emu_set_rewind_target_offset(int offset)
+{
+    rewind_target_offset = offset;
+    if (rewind_target_offset < 0)
+        rewind_target_offset = 0;
+    if (rewind_target_offset >= (int)rewind_buffer.size())
+        rewind_target_offset = (int)rewind_buffer.size() - 1;
+}
+
+u64 emu_get_rewind_target_frame_number(void)
+{
+    if (rewind_buffer.empty())
+        return 0;
+
+    int index = (int)rewind_buffer.size() - 1 - rewind_target_offset;
+    if (index < 0 || index >= (int)rewind_buffer.size())
+        return 0;
+
+    return rewind_buffer[index].frame_number;
+}
+
+bool emu_apply_rewind_target(void)
+{
+    return rewind_restore_target();
+}
+
+void emu_reset_rewind_buffer(void)
+{
+    rewind_clear_buffer();
+}
+
 void emu_destroy(void)
 {
     save_ram();
@@ -123,6 +305,7 @@ bool emu_load_rom(const char* file_path)
         return false;
 
     load_ram();
+    rewind_clear_buffer();
 
     if (config_debug.debug && (config_debug.dis_look_ahead_count > 0))
         core->GetM6502()->DisassembleAhead(config_debug.dis_look_ahead_count);
@@ -140,6 +323,8 @@ void emu_update(void)
         return;
 
     int sampleCount = 0;
+
+    bool frame_executed = false;
 
     if (config_debug.debug)
     {
@@ -161,7 +346,10 @@ void emu_update(void)
         bool executed = (emu_debug_command != Debug_Command_None);
 
         if (executed)
+        {
             breakpoint_hit = core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount, &debug_run);
+            frame_executed = true;
+        }
 
         if (breakpoint_hit || emu_debug_command == Debug_Command_StepFrame || emu_debug_command == Debug_Command_Step)
         {
@@ -190,7 +378,10 @@ void emu_update(void)
             update_debug();
     }
     else
+    {
         core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount);
+        frame_executed = true;
+    }
 
     if ((sampleCount > 0) && !core->IsPaused())
     {
@@ -202,6 +393,9 @@ void emu_update(void)
         memset(audio_buffer, 0, silence_count * sizeof(s16));
         sound_queue_write(audio_buffer, silence_count, false);
     }
+
+    if (config_emulator.rewind_enabled && frame_executed)
+        rewind_save_frame();
 }
 
 void emu_key_pressed(GLYNX_Keys key)
@@ -258,6 +452,7 @@ void emu_reset(void)
 
     save_ram();
     core->ResetROM(false);
+    rewind_clear_buffer();
     load_ram();
 }
 
@@ -316,6 +511,7 @@ void emu_load_ram(const char* file_path)
         save_ram();
         core->ResetROM(false);
         core->LoadRam(file_path, true);
+        rewind_clear_buffer();
     }
 }
 
@@ -335,6 +531,7 @@ void emu_load_state_slot(int index)
     {
         const char* dir = get_configurated_dir(config_emulator.savestates_dir_option, config_emulator.savestates_path.c_str());
         core->LoadState(dir, index);
+        rewind_clear_buffer();
     }
 }
 
@@ -347,7 +544,10 @@ void emu_save_state_file(const char* file_path)
 void emu_load_state_file(const char* file_path)
 {
     if (!emu_is_empty())
+    {
         core->LoadState(file_path);
+        rewind_clear_buffer();
+    }
 }
 
 void update_savestates_data(void)

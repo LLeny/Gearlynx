@@ -359,6 +359,7 @@ static void menu_emulator(void)
             ImGui::EndMenu();
         }
 
+
         if (ImGui::BeginMenu("Savefiles Dir"))
         {
             ImGui::PushItemWidth(220.0f);
@@ -887,6 +888,7 @@ static void menu_debug(void)
         ImGui::Separator();
 
         ImGui::MenuItem("Show Output Screen", "", &config_debug.show_screen, config_debug.debug);
+        ImGui::MenuItem("Show Rewind", "", &config_debug.show_rewind, config_debug.debug);
 
         if (ImGui::BeginMenu("Output Scale", config_debug.debug))
         {

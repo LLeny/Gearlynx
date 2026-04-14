@@ -189,6 +189,7 @@ void config_read(void)
     config_debug.scb_viewer_auto = read_bool("Debug", "SCBViewerAuto", true);
     config_debug.scb_viewer_mode = read_int("Debug", "SCBViewerMode", 1);
     config_debug.show_frame_buffers = read_bool("Debug", "FrameBuffers", false);
+    config_debug.show_rewind = read_bool("Debug", "Rewind", false);
     config_debug.frame_buffer_custom_address = read_int("Debug", "FrameBufferCustomAddress", 0x0000);
     config_debug.show_lcd = read_bool("Debug", "LCD", false);
     config_debug.show_uart = read_bool("Debug", "UART", false);
@@ -255,6 +256,8 @@ void config_read(void)
     config_emulator.status_messages = read_bool("Emulator", "StatusMessages", false);
     config_emulator.mcp_tcp_port = read_int("Emulator", "MCPTCPPort", 7777);
     config_emulator.console_type = read_int("Emulator", "ConsoleType", 0);
+    config_emulator.rewind_enabled = read_bool("Emulator", "RewindEnabled", false);
+    config_emulator.rewind_buffer_length = read_int("Emulator", "RewindBufferLength", 60);
 
     if (config_emulator.savefiles_path.empty())
     {
@@ -392,6 +395,7 @@ void config_write(void)
     write_int("Debug", "SCBViewerMode", config_debug.scb_viewer_mode);
     write_bool("Debug", "TraceLogger", config_debug.show_trace_logger);
     write_bool("Debug", "FrameBuffers", config_debug.show_frame_buffers);
+    write_bool("Debug", "Rewind", config_debug.show_rewind);
     write_int("Debug", "FrameBufferCustomAddress", config_debug.frame_buffer_custom_address);
     write_bool("Debug", "LCD", config_debug.show_lcd);
     write_bool("Debug", "UART", config_debug.show_uart);
@@ -458,6 +462,8 @@ void config_write(void)
     write_bool("Emulator", "StatusMessages", config_emulator.status_messages);
     write_int("Emulator", "MCPTCPPort", config_emulator.mcp_tcp_port);
     write_int("Emulator", "ConsoleType", config_emulator.console_type);
+    write_bool("Emulator", "RewindEnabled", config_emulator.rewind_enabled);
+    write_int("Emulator", "RewindBufferLength", config_emulator.rewind_buffer_length);
 
     for (int i = 0; i < config_max_recent_roms; i++)
     {

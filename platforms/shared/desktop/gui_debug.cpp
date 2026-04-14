@@ -38,6 +38,7 @@
 #include "gui_debug_cart.h"
 #include "emu.h"
 #include "config.h"
+#include "gui.h"
 
 void gui_debug_init(void)
 {
@@ -66,6 +67,77 @@ void gui_debug_reset(void)
     gui_debug_reset_disassembler_bookmarks();
     gui_debug_reset_memory_bookmarks();
     gui_debug_reset_memory_watches();
+}
+
+static void gui_debug_window_rewind(void)
+{
+    if (!ImGui::Begin("Rewind", &config_debug.show_rewind, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::MenuItem("Enable Rewind", NULL, &config_emulator.rewind_enabled);
+
+    if (config_emulator.rewind_enabled)
+    {
+        ImGui::PushItemWidth(140.0f);
+        if (ImGui::SliderInt("Buffer Length", &config_emulator.rewind_buffer_length, 1, 10000, "%d frames"))
+        {
+            if (config_emulator.rewind_buffer_length < 1)
+                config_emulator.rewind_buffer_length = 1;
+            if (config_emulator.rewind_buffer_length > 10000)
+                config_emulator.rewind_buffer_length = 10000;
+        }
+        ImGui::PopItemWidth();
+
+        int frame_count = emu_get_rewind_frame_count();
+        ImGui::Text("Saved frames: %d / %d", frame_count, config_emulator.rewind_buffer_length);
+
+        if (frame_count > 0)
+        {
+            int target_offset = emu_get_rewind_target_offset();
+            if (ImGui::SliderInt("Rewind position", &target_offset, 0, frame_count - 1))
+            {
+                if (emu_preview_rewind_target(target_offset))
+                    gui_set_status_message("Rewind state restored", 1000);
+                else
+                    gui_set_status_message("Rewind preview failed", 2000);
+            }
+
+            ImGui::PushItemWidth(80.0f);
+            if (ImGui::InputInt("##rewind_frame_input", &target_offset, 1, 10))
+            {
+                if (target_offset < 0)
+                    target_offset = 0;
+                if (target_offset >= frame_count)
+                    target_offset = frame_count - 1;
+                if (emu_preview_rewind_target(target_offset))
+                    gui_set_status_message("Rewind state restored", 1000);
+                else
+                    gui_set_status_message("Rewind preview failed", 2000);
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::Text("0 = latest, %d = oldest", frame_count - 1);
+
+            u64 selected_frame_number = emu_get_rewind_target_frame_number();
+            ImGui::Text("Selected saved state: #%llu", (unsigned long long)selected_frame_number);
+        }
+        else
+        {
+            ImGui::Text("No rewind frames stored yet.");
+        }
+    }
+    else
+    {
+        if (!emu_get_rewind_frame_count())
+            ImGui::Text("Rewind is disabled.");
+        else
+            ImGui::Text("Rewind disabled and buffer preserved until enabled.");
+    }
+
+    ImGui::End();
 }
 
 void gui_debug_windows(void)
@@ -102,6 +174,8 @@ void gui_debug_windows(void)
             gui_debug_window_scb_viewer();
         if (config_debug.show_frame_buffers)
             gui_debug_window_frame_buffers();
+        if (config_debug.show_rewind)
+            gui_debug_window_rewind();
         if (config_debug.show_lcd)
             gui_debug_window_lcd();
         if (config_debug.show_uart)

@@ -63,6 +63,8 @@ struct config_Emulator
     bool status_messages = false;
     int mcp_tcp_port = 7777;
     int console_type = 0;
+    bool rewind_enabled = false;
+    int rewind_buffer_length = 60;
 };
 
 struct config_Video
@@ -180,6 +182,7 @@ struct config_Debug
     bool scb_viewer_auto = true;
     int scb_viewer_mode = 1;
     bool show_frame_buffers = false;
+    bool show_rewind = false;
     int frame_buffer_custom_address = 0x0000;
     bool show_lcd = false;
     bool show_uart = false;

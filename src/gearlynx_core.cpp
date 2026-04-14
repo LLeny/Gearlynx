@@ -615,17 +615,6 @@ bool GearlynxCore::LoadState(std::istream& stream)
         Debug("Load state header screenshot height: %d", desktop_header.screenshot_height);
         Debug("Load state header emu build: %s", desktop_header.emu_build);
 
-        if (desktop_header.size != size)
-        {
-            Error("Invalid save state size: %d", desktop_header.size);
-            return false;
-        }
-
-        if (desktop_header.rom_crc != m_media->GetCRC())
-        {
-            Error("Invalid save state rom crc: 0x%08x", desktop_header.rom_crc);
-            return false;
-        }
     }
 #endif
 
