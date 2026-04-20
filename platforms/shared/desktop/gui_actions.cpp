@@ -23,6 +23,7 @@
 #include "gui_debug_trace_logger.h"
 #include "config.h"
 #include "emu.h"
+#include "rewind.h"
 #include "gearlynx.h"
 #include "application.h"
 #include "display.h"
@@ -39,8 +40,7 @@ void gui_action_reset(void)
     {
         emu_pause();
 
-        for (int i = 0; i < 1024 * 512 * 4; i++)
-            emu_frame_buffer[i] = 0;
+        emu_clear_frame_buffer();
     }
 }
 
@@ -85,6 +85,28 @@ void gui_action_ffwd(void)
     }
 }
 
+void gui_action_rewind_pressed(void)
+{
+    if (emu_is_empty() || !config_rewind.enabled)
+        return;
+    if (rewind_is_active())
+        return;
+
+    rewind_set_active(true);
+    display_set_vsync(false);
+    gui_set_status_message("Rewinding...", 500);
+}
+
+void gui_action_rewind_released(void)
+{
+    if (!rewind_is_active())
+        return;
+
+    rewind_set_active(false);
+    display_set_vsync(config_emulator.ffwd ? false : config_video.sync);
+    emu_audio_reset();
+}
+
 void gui_action_save_screenshot(const char* path)
 {
     using namespace std;
@@ -95,7 +117,10 @@ void gui_action_save_screenshot(const char* path)
     time_t now = time(0);
     tm* ltm = localtime(&now);
 
-    string date_time = to_string(1900 + ltm->tm_year) + "-" + to_string(1 + ltm->tm_mon) + "-" + to_string(ltm->tm_mday) + " " + to_string(ltm->tm_hour) + to_string(ltm->tm_min) + to_string(ltm->tm_sec);
+    char date_time[32];
+    snprintf(date_time, sizeof(date_time), "%04d-%02d-%02d %02d%02d%02d",
+             1900 + ltm->tm_year, 1 + ltm->tm_mon, ltm->tm_mday,
+             ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
 
     string file_path;
 
