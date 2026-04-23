@@ -42,7 +42,6 @@ static const int k_frame_buffer_size = 256 * 256 * 4;
 static void save_ram(void);
 static void load_ram(void);
 static void reset_buffers(void);
-static void render_current_frame(void);
 static const char* get_configurated_dir(int option, const char* path);
 static void init_debug(void);
 static void destroy_debug(void);
@@ -142,7 +141,7 @@ bool emu_load_rom(const char* file_path)
     return true;
 }
 
-static void render_current_frame(void)
+void emu_render_current_frame(void)
 {
     LcdScreen* lcd_screen = core->GetMikey()->GetLcdScreen();
 
@@ -182,7 +181,7 @@ void emu_update(void)
         }
 
         if (rewound)
-            render_current_frame();
+            emu_render_current_frame();
 
         int silence_count = GLYNX_AUDIO_QUEUE_SIZE;
         memset(audio_buffer, 0, silence_count * sizeof(s16));
@@ -211,6 +210,7 @@ void emu_update(void)
 
         if (executed)
         {
+            rewind_commit_seek();
             breakpoint_hit = core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount, &debug_run);
             frame_executed = true;
         }
@@ -243,6 +243,7 @@ void emu_update(void)
     }
     else
     {
+        rewind_commit_seek();
         core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount);
         frame_executed = true;
     }
