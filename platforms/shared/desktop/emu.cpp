@@ -25,6 +25,7 @@
 #include "sound_queue.h"
 #include "config.h"
 #include "rewind.h"
+#include "events.h"
 #include "mcp/mcp_manager.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -38,6 +39,8 @@ static s16* audio_buffer;
 static bool audio_enabled;
 static McpManager* mcp_manager;
 static const int k_frame_buffer_size = 256 * 256 * 4;
+static Uint64 rewind_last_counter = 0;
+static double rewind_pop_accumulator = 0.0;
 
 static void save_ram(void);
 static void load_ram(void);
@@ -51,6 +54,8 @@ static void update_debug_framebuffers(void);
 static void update_debug_sprites(void);
 static void update_debug_sprites_accumulated(void);
 static void render_debug_sprites(int count);
+static void reset_rewind_timing(void);
+static int get_rewind_pop_budget(void);
 
 bool emu_init(void)
 {
@@ -155,6 +160,11 @@ void emu_render_current_frame(void)
     lcd_screen->EndFrame(core->GetMedia()->GetRotation());
 }
 
+void emu_reset_rewind_timing(void)
+{
+    reset_rewind_timing();
+}
+
 void emu_update(void)
 {
     emu_mcp_pump_commands();
@@ -167,9 +177,7 @@ void emu_update(void)
 
     if (rewind_is_active())
     {
-        int to_pop = (int)config_rewind.speed;
-        if (to_pop < 1)
-            to_pop = 1;
+        int to_pop = get_rewind_pop_budget();
 
         bool rewound = false;
         for (int i = 0; i < to_pop; i++)
@@ -188,6 +196,8 @@ void emu_update(void)
         sound_queue_write(audio_buffer, silence_count, false);
         return;
     }
+
+    reset_rewind_timing();
 
     if (config_debug.debug)
     {
@@ -261,6 +271,44 @@ void emu_update(void)
         memset(audio_buffer, 0, silence_count * sizeof(s16));
         sound_queue_write(audio_buffer, silence_count, false);
     }
+}
+
+static void reset_rewind_timing(void)
+{
+    rewind_last_counter = 0;
+    rewind_pop_accumulator = 0.0;
+}
+
+static int get_rewind_pop_budget(void)
+{
+    Uint64 now = SDL_GetPerformanceCounter();
+
+    if (rewind_last_counter == 0)
+    {
+        rewind_last_counter = now;
+        return 0;
+    }
+
+    double elapsed = (double)(now - rewind_last_counter) / (double)SDL_GetPerformanceFrequency();
+    rewind_last_counter = now;
+
+    if (elapsed < 0.0)
+        elapsed = 0.0;
+    else if (elapsed > 0.25)
+        elapsed = 0.25;
+
+    int frames_per_snapshot = rewind_get_frames_per_snapshot();
+    if (frames_per_snapshot < 1)
+        frames_per_snapshot = 1;
+
+    double snapshots_per_second = (60.0 * (double)config_rewind.speed) / (double)frames_per_snapshot;
+    rewind_pop_accumulator += elapsed * snapshots_per_second;
+
+    int to_pop = (int)rewind_pop_accumulator;
+    if (to_pop > 0)
+        rewind_pop_accumulator -= (double)to_pop;
+
+    return to_pop;
 }
 
 void emu_key_pressed(GLYNX_Keys key)
@@ -401,8 +449,11 @@ void emu_load_state_slot(int index)
     if (!emu_is_empty())
     {
         const char* dir = get_configurated_dir(config_emulator.savestates_dir_option, config_emulator.savestates_path.c_str());
-        core->LoadState(dir, index);
-        rewind_reset();
+        if (core->LoadState(dir, index))
+        {
+            events_sync_input();
+            rewind_reset();
+        }
     }
 }
 
@@ -416,8 +467,11 @@ void emu_load_state_file(const char* file_path)
 {
     if (!emu_is_empty())
     {
-        core->LoadState(file_path);
-        rewind_reset();
+        if (core->LoadState(file_path))
+        {
+            events_sync_input();
+            rewind_reset();
+        }
     }
 }
 
