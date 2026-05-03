@@ -26,6 +26,7 @@
 #include "../gui_debug_disassembler.h"
 #include "../gui_debug_memory.h"
 #include "../gui_debug_memeditor.h"
+#include "../gui_debug_rewind.h"
 #include "../config.h"
 #include "../rewind.h"
 #include "mikey_defines.h"
@@ -73,7 +74,7 @@ void DebugAdapter::StepFrame()
 
 void DebugAdapter::Reset()
 {
-    emu_reset();
+    gui_action_reset();
 }
 
 json DebugAdapter::GetDebugStatus()
@@ -341,6 +342,7 @@ std::vector<DisasmLine> DebugAdapter::GetDisassembly(u16 start_address, u16 end_
             line.address = (u16)addr;
             line.rom = record->rom;
             line.name = record->name;
+            strip_color_tags(line.name);
             line.bytes = record->bytes;
             line.segment = record->segment;
             line.size = record->size;
@@ -461,6 +463,8 @@ json DebugAdapter::GetMediaInfo()
     json info;
     Media* media = m_core->GetMedia();
 
+    info["emulator"] = GLYNX_TITLE;
+    info["emulator_version"] = GLYNX_VERSION;
     info["ready"] = media->IsReady();
     info["file_path"] = media->GetFilePath();
     info["file_name"] = media->GetFileName();
@@ -3045,10 +3049,8 @@ json DebugAdapter::RewindSeek(int snapshot)
 
     int age = count - snapshot;
 
-    if (!rewind_seek(age))
+    if (!gui_debug_rewind_seek(age))
         return {{"error", "Failed to load snapshot"}};
-
-    emu_render_current_frame();
 
     M6502::M6502_State* cpu = m_core->GetM6502()->GetState();
     std::ostringstream ss;

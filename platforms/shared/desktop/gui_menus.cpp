@@ -59,6 +59,7 @@ static void menu_input(void);
 static void menu_audio(void);
 static void menu_debug(void);
 static void menu_about(void);
+static void draw_mcp_status(void);
 static void file_dialogs(void);
 static void keyboard_configuration_item(const char* text, SDL_Scancode* key);
 static void gamepad_configuration_item(const char* text, int* button);
@@ -102,6 +103,7 @@ void gui_main_menu(void)
         menu_audio();
         menu_debug();
         menu_about();
+        draw_mcp_status();
 
         gui_main_menu_height = (int)ImGui::GetWindowSize().y;
 
@@ -475,6 +477,7 @@ static void menu_emulator(void)
             hotkey_configuration_item("Save State Slot 4:", &config_hotkeys[config_HotkeyIndex_SelectSlot4]);
             hotkey_configuration_item("Save State Slot 5:", &config_hotkeys[config_HotkeyIndex_SelectSlot5]);
             hotkey_configuration_item("Screenshot:", &config_hotkeys[config_HotkeyIndex_Screenshot]);
+            hotkey_configuration_item("Mute Audio:", &config_hotkeys[config_HotkeyIndex_Mute]);
             hotkey_configuration_item("Fullscreen:", &config_hotkeys[config_HotkeyIndex_Fullscreen]);
             hotkey_configuration_item("Show Main Menu:", &config_hotkeys[config_HotkeyIndex_ShowMainMenu]);
 
@@ -499,6 +502,17 @@ static void menu_emulator(void)
             gui_popup_modal_hotkey();
 
             ImGui::EndMenu();
+        }
+
+        ImGui::Separator();
+
+        ImGui::MenuItem("Fast Sprite Rendering", "", &config_emulator.fast_sprite_rendering);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text("Use a simpler Suzy sprite renderer.");
+            ImGui::Text("This is faster but it is less accurate.");
+            ImGui::EndTooltip();
         }
 
         ImGui::Separator();
@@ -720,6 +734,7 @@ static void menu_input(void)
                 gamepad_configuration_item("Fast Forward:", &config_input_gamepad_shortcuts.gamepad_shortcuts[config_HotkeyIndex_FFWD]);
                 gamepad_configuration_item("Rewind:", &config_input_gamepad_shortcuts.gamepad_shortcuts[config_HotkeyIndex_Rewind]);
                 gamepad_configuration_item("Screenshot:", &config_input_gamepad_shortcuts.gamepad_shortcuts[config_HotkeyIndex_Screenshot]);
+                gamepad_configuration_item("Mute Audio:", &config_input_gamepad_shortcuts.gamepad_shortcuts[config_HotkeyIndex_Mute]);
 
                 gui_popup_modal_gamepad();
 
@@ -739,9 +754,28 @@ static void menu_audio(void)
     {
         gui_in_use = true;
 
-        if (ImGui::MenuItem("Enable Audio", "", &config_audio.enable))
+        if (ImGui::MenuItem("Enable Audio", config_hotkeys[config_HotkeyIndex_Mute].str, &config_audio.enable))
         {
             emu_audio_mute(!config_audio.enable);
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::BeginMenu("Master Volume", config_audio.enable))
+        {
+            ImGui::PushItemWidth(200.0f);
+            if (ImGui::SliderFloat("##master_volume", &config_audio.master_volume, 0.0f, 2.0f, "Volume = %.2f", ImGuiSliderFlags_AlwaysClamp))
+            {
+                emu_audio_set_master_volume(config_audio.master_volume);
+            }
+            ImGui::PopItemWidth();
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::Text("Anything above 1.00 may cause clipping.");
+                ImGui::EndTooltip();
+            }
+            ImGui::EndMenu();
         }
 
         ImGui::Separator();
@@ -1000,6 +1034,42 @@ static void menu_about(void)
         }
         ImGui::EndMenu();
     }
+}
+
+static void draw_mcp_status(void)
+{
+    if (!emu_mcp_is_running())
+        return;
+
+    char status[64];
+    ImVec4 color(0.10f, 0.90f, 0.10f, 1.0f);
+
+    int transport_mode = emu_mcp_get_transport_mode();
+    if (transport_mode == 0)
+    {
+        snprintf(status, sizeof(status), "MCP: STDIO");
+        color = ImVec4(0.90f, 0.70f, 0.10f, 1.0f);
+    }
+    else if (transport_mode == 1)
+    {
+        snprintf(status, sizeof(status), "MCP: HTTP (%d)", config_emulator.mcp_tcp_port);
+    }
+    else
+    {
+        return;
+    }
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    float text_width = ImGui::CalcTextSize(status).x;
+    float status_x = ImGui::GetWindowWidth() - text_width - style.ItemSpacing.x - 10.0f;
+    float cursor_x = ImGui::GetCursorPosX();
+
+    if (status_x <= cursor_x + style.ItemSpacing.x)
+        return;
+
+    ImGui::SameLine(status_x);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(color, "%s", status);
 }
 
 static void file_dialogs(void)

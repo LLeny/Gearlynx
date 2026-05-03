@@ -253,9 +253,12 @@ void emu_update(void)
     }
     else
     {
-        rewind_commit_seek();
-        core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount);
-        frame_executed = true;
+        if (!core->IsPaused())
+        {
+            rewind_commit_seek();
+            core->RunToVBlank(emu_frame_buffer, audio_buffer, &sampleCount);
+            frame_executed = true;
+        }
     }
 
     if (frame_executed)
@@ -394,6 +397,11 @@ void emu_audio_mute(bool mute)
 void emu_audio_set_volume(int channel, float volume)
 {
     core->GetAudio()->SetVolume(channel, volume);
+}
+
+void emu_audio_set_master_volume(float volume)
+{
+    core->GetAudio()->SetMasterVolume(volume);
 }
 
 void emu_audio_set_lowpass_cutoff(float fc)
@@ -714,6 +722,8 @@ int emu_get_framebuffer_png(int buffer_index, unsigned char** out_buffer)
 
     if (buffer_index < 0 || buffer_index > 1)
         return 0;
+
+    update_debug_framebuffers();
 
     int stride = GLYNX_SCREEN_WIDTH * 4;
     int len = 0;

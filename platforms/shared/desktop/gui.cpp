@@ -99,7 +99,9 @@ bool gui_init(void)
 
     emu_force_rotation(config_video.rotation);
     emu_force_console_type(config_emulator.console_type);
+    emu_get_core()->GetSuzy()->SetFastSpriteRendering(config_emulator.fast_sprite_rendering);
     emu_audio_mute(!config_audio.enable);
+    emu_audio_set_master_volume(config_audio.master_volume);
     emu_audio_set_lowpass_cutoff((float)config_audio.lowpass_cutoff);
     for (int i = 0; i < 4; i++)
         emu_audio_set_volume(i, config_audio.volume[i]);
@@ -175,6 +177,10 @@ void gui_shortcut(gui_ShortCutEvent event)
     case gui_ShortcutFFWD:
         config_emulator.ffwd = !config_emulator.ffwd;
         gui_action_ffwd();
+        break;
+    case gui_ShortcutMute:
+        config_audio.enable = !config_audio.enable;
+        emu_audio_mute(!config_audio.enable);
         break;
     case gui_ShortcutSaveState:
     {
@@ -263,6 +269,7 @@ void gui_load_rom(const char* path)
 
     push_recent_rom(path);
     emu_resume();
+    emu_get_core()->GetSuzy()->SetFastSpriteRendering(config_emulator.fast_sprite_rendering);
 
     if (!emu_load_rom(path))
     {

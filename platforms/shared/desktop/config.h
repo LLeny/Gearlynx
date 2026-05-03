@@ -48,6 +48,7 @@ struct config_Emulator
     bool pause_when_inactive = true;
     bool ffwd = false;
     int ffwd_speed = 1;
+    bool fast_sprite_rendering = false;
     bool show_info = false;
     std::string recent_roms[config_max_recent_roms];
     std::string bios_path;
@@ -87,6 +88,7 @@ struct config_Audio
 {
     bool enable = true;
     bool sync = true;
+    float master_volume = 1.0f;
     float volume[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     int lowpass_cutoff = 3000;
     int buffer_count = 3;
@@ -152,6 +154,7 @@ enum config_HotkeyIndex
     config_HotkeyIndex_SelectSlot3,
     config_HotkeyIndex_SelectSlot4,
     config_HotkeyIndex_SelectSlot5,
+    config_HotkeyIndex_Mute,
     config_HotkeyIndex_COUNT
 };
 
