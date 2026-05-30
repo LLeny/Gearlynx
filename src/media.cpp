@@ -84,6 +84,7 @@ void Media::HardReset()
     SafeDeleteArray(m_rom);
     m_rom_size = 0;
     m_ready = false;
+    m_is_in_game_database = false;
     m_file_path[0] = 0;
     m_file_directory[0] = 0;
     m_file_name[0] = 0;
@@ -389,15 +390,15 @@ bool Media::LoadFromZipFile(const u8* buffer, int size)
 void Media::GatherInfoFromDB()
 {
     int i = 0;
-    bool found = false;
+    m_is_in_game_database = false;
 
-    while(!found && (k_game_database[i].title != 0))
+    while(!m_is_in_game_database && (k_game_database[i].title != 0))
     {
         u32 db_crc = k_game_database[i].crc;
 
         if (db_crc == m_crc)
         {
-            found = true;
+            m_is_in_game_database = true;
             Log("ROM found in database: %s. CRC: %08X", k_game_database[i].title, m_crc);
 
             if (m_rom_size == k_game_database[i].file_size)
@@ -459,7 +460,7 @@ void Media::GatherInfoFromDB()
             i++;
     }
 
-    if (!found)
+    if (!m_is_in_game_database)
     {
         Debug("ROM not found in database. CRC: %08X", m_crc);
     }
@@ -785,36 +786,61 @@ GLYNX_Rotation Media::ReadHeaderRotation(u8 rotation)
 
 GLYNX_EEPROM Media::ReadHeaderEEPROM(u8 eeprom)
 {
-    switch (eeprom)
+    u8 base_type = eeprom & 0x07;
+    u8 flags = eeprom & (GLYNX_EEPROM_SD | GLYNX_EEPROM_8BIT);
+    u8 unknown_bits = eeprom & ~(0x07 | GLYNX_EEPROM_SD | GLYNX_EEPROM_8BIT);
+
+    if (eeprom == 0)
     {
-        case 0:
-            Debug("Header EEPROM: No EEPROM");
-            return GLYNX_EEPROM_NONE;
-        case 1:
-            Debug("Header EEPROM: 93C46");
-            return GLYNX_EEPROM_93C46;
-        case 2:
-            Debug("Header EEPROM: 93C56");
-            return GLYNX_EEPROM_93C56;
-        case 3:
-            Debug("Header EEPROM: 93C66");
-            return GLYNX_EEPROM_93C66;
-        case 4:
-            Debug("Header EEPROM: 93C76");
-            return GLYNX_EEPROM_93C76;
-        case 5:
-            Debug("Header EEPROM: 93C86");
-            return GLYNX_EEPROM_93C86;
-        case 0x40:
+        Debug("Header EEPROM: No EEPROM");
+        return GLYNX_EEPROM_NONE;
+    }
+
+    if (unknown_bits != 0)
+    {
+        Debug("Invalid EEPROM value in header: %d", eeprom);
+        return GLYNX_EEPROM_NONE;
+    }
+
+    if (base_type == GLYNX_EEPROM_NONE)
+    {
+        if (eeprom & GLYNX_EEPROM_8BIT)
+            base_type = GLYNX_EEPROM_93C46;
+        else if (eeprom == GLYNX_EEPROM_SD)
+        {
             Debug("Header EEPROM: SD");
             return GLYNX_EEPROM_SD;
-        case 0x80:
-            Debug("Header EEPROM: 8-bit");
-            return GLYNX_EEPROM_8BIT;
+        }
+        else
+        {
+            Debug("Invalid EEPROM value in header: %d", eeprom);
+            return GLYNX_EEPROM_NONE;
+        }
+    }
+
+    switch (base_type)
+    {
+        case GLYNX_EEPROM_93C46:
+            Debug("Header EEPROM: 93C46%s%s", (flags & GLYNX_EEPROM_SD) ? " SD" : "", (flags & GLYNX_EEPROM_8BIT) ? " 8-bit" : "");
+            break;
+        case GLYNX_EEPROM_93C56:
+            Debug("Header EEPROM: 93C56%s%s", (flags & GLYNX_EEPROM_SD) ? " SD" : "", (flags & GLYNX_EEPROM_8BIT) ? " 8-bit" : "");
+            break;
+        case GLYNX_EEPROM_93C66:
+            Debug("Header EEPROM: 93C66%s%s", (flags & GLYNX_EEPROM_SD) ? " SD" : "", (flags & GLYNX_EEPROM_8BIT) ? " 8-bit" : "");
+            break;
+        case GLYNX_EEPROM_93C76:
+            Debug("Header EEPROM: 93C76%s%s", (flags & GLYNX_EEPROM_SD) ? " SD" : "", (flags & GLYNX_EEPROM_8BIT) ? " 8-bit" : "");
+            break;
+        case GLYNX_EEPROM_93C86:
+            Debug("Header EEPROM: 93C86%s%s", (flags & GLYNX_EEPROM_SD) ? " SD" : "", (flags & GLYNX_EEPROM_8BIT) ? " 8-bit" : "");
+            break;
         default:
             Debug("Invalid EEPROM value in header: %d", eeprom);
             return GLYNX_EEPROM_NONE;
     }
+
+    return (GLYNX_EEPROM)(base_type | flags);
 }
 
 bool Media::IsValidFile(const char* path)

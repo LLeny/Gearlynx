@@ -227,7 +227,7 @@ void GearlynxCore::SaveRam()
 
 void GearlynxCore::SaveRam(const char* path, bool full_path)
 {
-    if (m_media->IsReady() && m_media->IsSaveMemoryDirty())
+    if (m_media->IsReady() && m_media->GetSaveMemorySize() > 0)
     {
         using namespace std;
         string final_path;
@@ -237,8 +237,7 @@ void GearlynxCore::SaveRam(const char* path, bool full_path)
             final_path = path;
             if (!full_path)
             {
-                final_path += "/";
-                final_path += m_media->GetFileName();
+                append_path_component(final_path, m_media->GetFileName());
             }
         }
         else
@@ -268,7 +267,7 @@ void GearlynxCore::LoadRam()
 
 void GearlynxCore::LoadRam(const char* path, bool full_path)
 {
-    if (m_media->IsReady())
+    if (m_media->IsReady() && m_media->GetSaveMemorySize() > 0)
     {
         using namespace std;
         string final_path;
@@ -278,8 +277,7 @@ void GearlynxCore::LoadRam(const char* path, bool full_path)
             final_path = path;
             if (!full_path)
             {
-                final_path += "/";
-                final_path += m_media->GetFileName();
+                append_path_component(final_path, m_media->GetFileName());
             }
         }
         else
@@ -323,7 +321,19 @@ void GearlynxCore::LoadRam(const char* path, bool full_path)
 std::string GearlynxCore::GetSaveStatePath(const char* path, int index)
 {
     if (index < 0)
-        return path;
+    {
+        if (IsValidPointer(path))
+            return path;
+
+        using namespace std;
+        string full_path = m_media->GetFilePath();
+        string::size_type dot_index = full_path.rfind('.');
+
+        if (dot_index != string::npos)
+            full_path.replace(dot_index + 1, full_path.length() - dot_index - 1, "state");
+
+        return full_path;
+    }
 
     using namespace std;
     string full_path;
@@ -331,8 +341,7 @@ std::string GearlynxCore::GetSaveStatePath(const char* path, int index)
     if (IsValidPointer(path))
     {
         full_path = path;
-        full_path += "/";
-        full_path += m_media->GetFileName();
+        append_path_component(full_path, m_media->GetFileName());
     }
     else
         full_path = m_media->GetFilePath();
@@ -397,6 +406,12 @@ bool GearlynxCore::SaveState(u8* buffer, size_t& size, bool screenshot)
         if (!SaveState(direct_stream, size, screenshot))
         {
             Error("Failed to save state to buffer");
+            return false;
+        }
+
+        if (!direct_stream.good())
+        {
+            Error("Failed to save state to buffer: output buffer is too small");
             return false;
         }
 
@@ -557,7 +572,7 @@ bool GearlynxCore::LoadState(std::istream& stream)
         return false;
     }
 
-    GLYNX_SaveState_Header_Libretro header;
+    GLYNX_SaveState_Header_Libretro header = {};
 #if !defined(__LIBRETRO__)
     bool is_desktop_savestate = false;
 #endif
@@ -566,7 +581,7 @@ bool GearlynxCore::LoadState(std::istream& stream)
     size_t size = static_cast<size_t>(stream.tellg());
 
     // Try desktop header first (larger, contains all info)
-    GLYNX_SaveState_Header desktop_header;
+    GLYNX_SaveState_Header desktop_header = {};
     if (size >= sizeof(desktop_header))
     {
         stream.seekg(size - sizeof(desktop_header), ios::beg);
@@ -584,7 +599,7 @@ bool GearlynxCore::LoadState(std::istream& stream)
     }
 
     // Fallback to libretro header
-    if (header.magic != GLYNX_SAVESTATE_MAGIC)
+    if ((header.magic != GLYNX_SAVESTATE_MAGIC) && (size >= sizeof(header)))
     {
         stream.seekg(size - sizeof(header), ios::beg);
         stream.read(reinterpret_cast<char*> (&header), sizeof(header));

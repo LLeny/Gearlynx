@@ -47,9 +47,13 @@ static Uint64 status_message_start_time = 0;
 static Uint64 status_message_duration = 0;
 static bool error_window_active = false;
 static char error_message[4096] = "";
+static bool loading_rom_active = false;
+static char loading_rom_path[4096] = "";
 static void main_window(void);
 static void show_status_message(void);
 static void show_error_window(void);
+static void show_loading_popup(void);
+static void finish_loading_rom(void);
 static void set_style(void);
 static ImVec4 lerp(const ImVec4& a, const ImVec4& b, float t);
 
@@ -149,6 +153,7 @@ void gui_render(void)
     if (config_emulator.show_info)
         gui_show_info();
 
+    show_loading_popup();
     show_status_message();
     show_error_window();
 
@@ -163,8 +168,7 @@ void gui_shortcut(gui_ShortCutEvent event)
         gui_shortcut_open_rom = true;
         break;
     case gui_ShortcutReloadROM:
-        if (config_debug.debug)
-            gui_action_reload_rom();
+        gui_action_reload_rom();
         break;
     case gui_ShortcutReset:
         gui_action_reset();
@@ -276,6 +280,9 @@ void gui_shortcut(gui_ShortCutEvent event)
 
 void gui_load_rom(const char* path)
 {
+    if (loading_rom_active)
+        return;
+
     using namespace std;
 
     string message("Loading ROM ");
@@ -288,17 +295,15 @@ void gui_load_rom(const char* path)
     emu_resume();
     emu_get_core()->GetSuzy()->SetFastSpriteRendering(config_emulator.fast_sprite_rendering);
 
-    if (!emu_load_rom(path))
-    {
-        string message("Error loading ROM:\n");
-        message += path;
-        gui_set_error_message(message.c_str());
+    strncpy(loading_rom_path, path, sizeof(loading_rom_path) - 1);
+    loading_rom_path[sizeof(loading_rom_path) - 1] = '\0';
+    loading_rom_active = true;
 
-        emu_get_core()->GetMedia()->HardReset();
-        gui_action_reset();
-        return;
-    }
+    emu_load_rom_async(path);
+}
 
+static void finish_loading_rom(void)
+{
     if (!emu_get_core()->GetMedia()->IsBiosLoaded())
     {
         std::string message;
@@ -313,7 +318,7 @@ void gui_load_rom(const char* path)
 
     gui_debug_reset();
 
-    std::string str(path);
+    std::string str(loading_rom_path);
     str = str.substr(0, str.find_last_of("."));
     if (!gui_debug_load_symbols_file((str + ".sym").c_str()))
         if (!gui_debug_load_symbols_file((str + ".lbl").c_str()))
@@ -403,8 +408,22 @@ static void main_window(void)
     GLYNX_Runtime_Info runtime;
     emu_get_runtime(runtime);
 
-    int w = (int)ImGui::GetIO().DisplaySize.x;
-    int h = (int)ImGui::GetIO().DisplaySize.y - (application_show_menu ? gui_main_menu_height : 0);
+    ImGuiIO& io = ImGui::GetIO();
+
+    float framebuffer_scale_x = io.DisplayFramebufferScale.x;
+    float framebuffer_scale_y = io.DisplayFramebufferScale.y;
+
+    if (framebuffer_scale_x <= 0.0f)
+        framebuffer_scale_x = 1.0f;
+    if (framebuffer_scale_y <= 0.0f)
+        framebuffer_scale_y = 1.0f;
+
+    float logical_w = io.DisplaySize.x;
+    float logical_h = io.DisplaySize.y - (application_show_menu ? (float)gui_main_menu_height : 0.0f);
+    int w = (int)logical_w;
+    int h = (int)logical_h;
+    int physical_w = (int)floorf(logical_w * framebuffer_scale_x);
+    int physical_h = (int)floorf(logical_h * framebuffer_scale_y);
 
     int selected_ratio = config_debug.debug ? 0 : config_video.ratio;
     float ratio = 0;
@@ -426,7 +445,7 @@ static void main_window(void)
 
     if (!config_debug.debug && config_video.scale == 3)
     {
-        ratio = (float)w / (float)h;
+        ratio = logical_w / logical_h;
     }
 
     int base_width = (int)(runtime.screen_width);
@@ -458,8 +477,8 @@ static void main_window(void)
         {
         case 0:
         {
-            int factor_w = w / w_corrected;
-            int factor_h = h / h_corrected;
+            int factor_w = physical_w / w_corrected;
+            int factor_h = physical_h / h_corrected;
             scale_multiplier = (factor_w < factor_h) ? factor_w : factor_h;
             break;
         }
@@ -480,10 +499,35 @@ static void main_window(void)
             scale_multiplier = 1;
             break;
         }
+
+        if (config_video.scale <= 1)
+        {
+            if (scale_multiplier < 1)
+                scale_multiplier = 1;
+        }
     }
 
-    gui_main_window_width = w_corrected * scale_multiplier;
-    gui_main_window_height = h_corrected * scale_multiplier;
+    float image_w = (float)(w_corrected * scale_multiplier);
+    float image_h = (float)(h_corrected * scale_multiplier);
+
+    if (config_debug.debug || config_video.scale <= 1)
+    {
+        image_w /= framebuffer_scale_x;
+        image_h /= framebuffer_scale_y;
+    }
+
+    int image_logical_width = (int)ceilf(image_w);
+    int image_logical_height = (int)ceilf(image_h);
+    int image_physical_width = (int)roundf(image_w * framebuffer_scale_x);
+    int image_physical_height = (int)roundf(image_h * framebuffer_scale_y);
+
+    if (image_physical_width < 1)
+        image_physical_width = 1;
+    if (image_physical_height < 1)
+        image_physical_height = 1;
+
+    gui_main_window_width = image_logical_width;
+    gui_main_window_height = image_logical_height;
     gui_scale_multiplier = scale_multiplier;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -503,11 +547,14 @@ static void main_window(void)
     }
     else
     {
-        int window_x = (w - (w_corrected * scale_multiplier)) / 2;
-        int window_y = ((h - (h_corrected * scale_multiplier)) / 2) + (application_show_menu ? gui_main_menu_height : 0);
+        float window_x = (logical_w - image_w) * 0.5f;
+        float window_y = ((logical_h - image_h) * 0.5f) + (application_show_menu ? (float)gui_main_menu_height : 0.0f);
 
-        ImGui::SetNextWindowSize(ImVec2((float)gui_main_window_width, (float)gui_main_window_height));
-        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos + ImVec2((float)window_x, (float)window_y));
+        window_x = roundf(window_x * framebuffer_scale_x) / framebuffer_scale_x;
+        window_y = roundf(window_y * framebuffer_scale_y) / framebuffer_scale_y;
+
+        ImGui::SetNextWindowSize(ImVec2(image_w, image_h));
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos + ImVec2(window_x, window_y));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBringToFrontOnFocus;
@@ -516,10 +563,20 @@ static void main_window(void)
         gui_main_window_hovered = ImGui::IsWindowHovered();
     }
 
-    float tex_h = (float)runtime.screen_width / (float)(SYSTEM_TEXTURE_WIDTH);
-    float tex_v = (float)runtime.screen_height / (float)(SYSTEM_TEXTURE_HEIGHT);
+    OglRendererScreenGeometry screen_geometry;
+    screen_geometry.logical_width = image_logical_width;
+    screen_geometry.logical_height = image_logical_height;
+    screen_geometry.physical_width = image_physical_width;
+    screen_geometry.physical_height = image_physical_height;
+    screen_geometry.framebuffer_scale_x = framebuffer_scale_x;
+    screen_geometry.framebuffer_scale_y = framebuffer_scale_y;
+    ogl_renderer_set_screen_geometry(&screen_geometry);
 
-    ImGui::Image((ImTextureID)(intptr_t)ogl_renderer_emu_texture, ImVec2((float)gui_main_window_width, (float)gui_main_window_height), ImVec2(0, 0), ImVec2(tex_h, tex_v));
+    float tex_h = 1.0f;
+    float tex_v = 1.0f;
+    ogl_renderer_get_screen_uv(&tex_h, &tex_v);
+
+    ImGui::Image((ImTextureID)(intptr_t)ogl_renderer_get_screen_texture(), ImVec2(image_w, image_h), ImVec2(0, 0), ImVec2(tex_h, tex_v));
 
     if (config_video.fps)
         gui_show_fps();
@@ -562,6 +619,69 @@ static void show_status_message(void)
 
         ImGui::PopStyleVar();
     }
+}
+
+static void show_loading_popup(void)
+{
+    if (!loading_rom_active)
+        return;
+
+    if (!emu_is_rom_loading())
+    {
+        loading_rom_active = false;
+        gui_dialog_in_use = false;
+        bool success = emu_finish_rom_loading();
+
+        if (success)
+        {
+            finish_loading_rom();
+        }
+        else
+        {
+            std::string message("Error loading ROM:\n");
+            message += loading_rom_path;
+            gui_set_error_message(message.c_str());
+
+            emu_get_core()->GetMedia()->HardReset();
+            gui_action_reset();
+        }
+        return;
+    }
+
+    gui_dialog_in_use = true;
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 loading_highlight = style.Colors[ImGuiCol_HeaderHovered];
+    ImVec4 loading_border = loading_highlight;
+    loading_border.w = 0.80f;
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30.0f, 20.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 12.0f));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.10f, 0.10f, 0.10f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Border, loading_border);
+    ImGui::OpenPopup("##loading");
+
+    if (ImGui::BeginPopupModal("##loading", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove))
+    {
+        ImGui::PushFont(gui_roboto_font);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, loading_highlight);
+        ImGui::TextUnformatted(ICON_MD_HOURGLASS_EMPTY);
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        ImGui::Text("LOADING...");
+
+        ImGui::PopFont();
+        ImGui::EndPopup();
+    }
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 static void show_error_window(void)
