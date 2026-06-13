@@ -250,6 +250,10 @@ void config_read(void)
     config_debug.dis_replace_labels = read_bool("Debug", "DisReplaceLabels", true);
     config_debug.dis_look_ahead_count = read_int("Debug", "DisLookAheadCount", 20);
     config_debug.step_skip_interrupts = read_bool("Debug", "StepSkipInterrupts", false);
+    config_debug.pause_on_brk = read_bool("Debug", "PauseOnBRK", false);
+    config_debug.pause_on_brk_value = read_int("Debug", "PauseOnBRKValue", 0x42);
+    config_debug.pause_on_brk_value = CLAMP(config_debug.pause_on_brk_value, 0, 0xFF);
+    config_debug.pause_on_brk_trigger_irq = read_bool("Debug", "PauseOnBRKTriggerIRQ", false);
     config_debug.font_size = read_int("Debug", "FontSize", 0);
     if (config_debug.font_size < 0 || config_debug.font_size > 3)
         config_debug.font_size = 0;
@@ -276,6 +280,7 @@ void config_read(void)
     config_emulator.theme = CLAMP(config_emulator.theme, config_Theme_Light, config_Theme_Dark);
     config_emulator.ffwd_speed = read_int("Emulator", "FFWD", 1);
     config_emulator.save_slot = read_int("Emulator", "SaveSlot", 0);
+    config_emulator.save_slot = CLAMP(config_emulator.save_slot, 0, 4);
     config_emulator.fast_sprite_rendering = read_bool("Emulator", "FastSpriteRendering", false);
     config_emulator.start_paused = read_bool("Emulator", "StartPaused", false);
     config_emulator.pause_when_inactive = read_bool("Emulator", "PauseWhenInactive", true);
@@ -291,6 +296,9 @@ void config_read(void)
     config_emulator.window_height = read_int("Emulator", "WindowHeight", 600);
     config_emulator.status_messages = read_bool("Emulator", "StatusMessages", false);
     config_emulator.mcp_tcp_port = read_int("Emulator", "MCPTCPPort", 7777);
+    config_emulator.mcp_http_address = read_string("Emulator", "MCPHTTPAddress");
+    if (config_emulator.mcp_http_address.empty())
+        config_emulator.mcp_http_address = "127.0.0.1";
     config_emulator.console_type = read_int("Emulator", "ConsoleType", 0);
 
     if (config_emulator.savefiles_path.empty())
@@ -477,6 +485,9 @@ void config_write(void)
     write_bool("Debug", "DisReplaceLabels", config_debug.dis_replace_labels);
     write_int("Debug", "DisLookAheadCount", config_debug.dis_look_ahead_count);
     write_bool("Debug", "StepSkipInterrupts", config_debug.step_skip_interrupts);
+    write_bool("Debug", "PauseOnBRK", config_debug.pause_on_brk);
+    write_int("Debug", "PauseOnBRKValue", config_debug.pause_on_brk_value);
+    write_bool("Debug", "PauseOnBRKTriggerIRQ", config_debug.pause_on_brk_trigger_irq);
     write_int("Debug", "FontSize", config_debug.font_size);
     write_int("Debug", "Scale", config_debug.scale);
     write_bool("Debug", "MultiViewport", config_debug.multi_viewport);
@@ -515,6 +526,7 @@ void config_write(void)
     write_int("Emulator", "WindowHeight", config_emulator.window_height);
     write_bool("Emulator", "StatusMessages", config_emulator.status_messages);
     write_int("Emulator", "MCPTCPPort", config_emulator.mcp_tcp_port);
+    write_string("Emulator", "MCPHTTPAddress", config_emulator.mcp_http_address);
     write_int("Emulator", "ConsoleType", config_emulator.console_type);
 
     for (int i = 0; i < config_max_recent_roms; i++)

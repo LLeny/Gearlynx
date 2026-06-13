@@ -254,7 +254,23 @@ void GearlynxCore::SaveRam(const char* path, bool full_path)
 
         ofstream file;
         open_ofstream_utf8(file, final_path.c_str(), ios::out | ios::binary);
-        m_media->SaveRam(file);
+
+        if (!file.is_open())
+        {
+            Error("Failed to open RAM file for writing: %s", final_path.c_str());
+            return;
+        }
+
+        bool ram_saved = m_media->SaveRam(file);
+        file.close();
+
+        if (!ram_saved || !file.good())
+        {
+            Error("Failed to write RAM file: %s", final_path.c_str());
+            return;
+        }
+
+        m_media->ClearSaveMemoryDirty();
 
         Debug("RAM saved");
     }
@@ -699,9 +715,37 @@ bool GearlynxCore::GetSaveStateHeader(int index, const char* path, GLYNX_SaveSta
     size_t savestate_size = static_cast<size_t>(stream.tellg());
     stream.seekg(0, ios::beg);
 
+    if (savestate_size < sizeof(GLYNX_SaveState_Header))
+    {
+        Error("Invalid save state file size: %zu", savestate_size);
+        stream.close();
+        return false;
+    }
+
     stream.seekg(savestate_size - sizeof(GLYNX_SaveState_Header), ios::beg);
     stream.read(reinterpret_cast<char*> (header), sizeof(GLYNX_SaveState_Header));
     stream.seekg(0, ios::beg);
+
+    if (stream.fail())
+    {
+        Error("Failed to read save state header from %s", full_path.c_str());
+        stream.close();
+        return false;
+    }
+
+    stream.close();
+
+    if (header->magic != GLYNX_SAVESTATE_MAGIC)
+    {
+        Error("Invalid save state magic: 0x%08x", header->magic);
+        return false;
+    }
+
+    if (header->size != savestate_size)
+    {
+        Error("Invalid save state size: %d", header->size);
+        return false;
+    }
 
     return true;
 }
@@ -730,7 +774,13 @@ bool GearlynxCore::GetSaveStateScreenshot(int index, const char* path, GLYNX_Sav
     }
 
     GLYNX_SaveState_Header header;
-    GetSaveStateHeader(index, path, &header);
+
+    if (!GetSaveStateHeader(index, path, &header))
+    {
+        Error("Invalid save state header");
+        stream.close();
+        return false;
+    }
 
     if (header.screenshot_size == 0)
     {
@@ -742,6 +792,13 @@ bool GearlynxCore::GetSaveStateScreenshot(int index, const char* path, GLYNX_Sav
     if (screenshot->size < header.screenshot_size)
     {
         Error("Invalid screenshot buffer size %d < %d", screenshot->size, header.screenshot_size);
+        stream.close();
+        return false;
+    }
+
+    if (header.size < (sizeof(header) + header.screenshot_size))
+    {
+        Error("Invalid screenshot size: %d", header.screenshot_size);
         stream.close();
         return false;
     }
