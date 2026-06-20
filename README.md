@@ -30,11 +30,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-windows-x64.zip">Gearlynx-1.2.13-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-windows-x64.zip">Gearlynx-1.2.14-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-windows-arm64.zip">Gearlynx-1.2.13-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-windows-arm64.zip">Gearlynx-1.2.14-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td rowspan="3"><strong>macOS</strong></td>
@@ -43,11 +43,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-macos-arm64.zip">Gearlynx-1.2.13-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-macos-arm64.zip">Gearlynx-1.2.14-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-macos-intel.zip">Gearlynx-1.2.13-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-macos-intel.zip">Gearlynx-1.2.14-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>Linux</strong></td>
@@ -60,15 +60,15 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.13-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.14-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.13-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.14-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.13-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.14-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td><strong>MCPB</strong></td>
@@ -125,7 +125,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 - **Docking Windows**: In debug mode, you can dock windows together by pressing SHIFT and dragging a window onto another.
 - **Multi-viewport**: In Windows or macOS, you can enable "multi-viewport" in the debug menu. You must restart the emulator for the change to take effect. Once enabled, you can drag debugger windows outside the main window.
 - **Single Instance**: You can enable "Single Instance" in the `Emulator` menu. When enabled, opening a ROM while another instance is running will send the ROM to the running instance instead of starting a new one.
-- **Debug Symbols**: The emulator automatically tries to load a symbol file when loading a ROM. For example, for `path_to_rom_file.rom` it tries to load `path_to_rom_file.sym`, `path_to_rom_file.lbl` and `path_to_rom_file.noi`. You can also load symbol files using the GUI or the CLI. It supports *cc65* (VICE label file), *lyxass* (EQU) and *mads* (lab and hea) file formats.
+- **Debug Symbols**: The emulator automatically tries to load a symbol file when loading a ROM. For example, for `path_to_rom_file.rom` it tries to load `path_to_rom_file.sym`, `path_to_rom_file.elf`, the loaded-file sidecar `path_to_rom_file.rom.elf`, `path_to_rom_file.lbl` and `path_to_rom_file.noi`. You can also load symbol files using the GUI or the CLI. It supports *cc65* (VICE label file), *lyxass* (EQU), *mads* (lab and hea), *llvm-nm*, *llvm-mos* ELF and *vicelbl* label formats.
 - **Debug Output**: Homebrew games can send debug text to the Trace Logger window using unused Mikey registers `$FDC0`–`$FDC4`. Enable *Debug Output* in the Trace Logger *Settings* menu and make sure the *Debug Messages* filter is active. See the register protocol below.
 
 | Register | Write |
@@ -181,7 +181,7 @@ Gearlynx passes all tests from [Atari Lynx Hardware Test ROMs](https://github.co
 
 ### Windows
 
-- Install Microsoft Visual Studio Community 2022 or later.
+- Install Microsoft Visual Studio Community 2026 or later.
 - Download the latest SDL3 VC development libraries from [SDL3 Releases](https://github.com/libsdl-org/SDL/releases) (the file named `SDL3-devel-x.y.z-VC.zip`).
 - Extract the archive and rename the resulting folder (e.g. `SDL3-x.y.z`) to `SDL3`.
 - Place the `SDL3` folder inside `platforms/windows/dependencies/` so that the include path is `platforms/windows/dependencies/SDL3/include/SDL3/`.

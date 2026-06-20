@@ -18,29 +18,29 @@ This server provides tools for game development, rom hacking, reverse engineerin
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-windows-x64.mcpb">Gearlynx-1.2.13-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-windows-x64.mcpb">Gearlynx-1.2.14-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-windows-arm64.mcpb">Gearlynx-1.2.13-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-windows-arm64.mcpb">Gearlynx-1.2.14-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>macOS</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-macos-x64.mcpb">Gearlynx-1.2.13-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-macos-x64.mcpb">Gearlynx-1.2.14-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-macos-arm64.mcpb">Gearlynx-1.2.13-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-macos-arm64.mcpb">Gearlynx-1.2.14-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>Linux</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-linux-x64.mcpb">Gearlynx-1.2.13-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-linux-x64.mcpb">Gearlynx-1.2.14-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.13/Gearlynx-1.2.13-mcpb-linux-arm64.mcpb">Gearlynx-1.2.13-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-linux-arm64.mcpb">Gearlynx-1.2.14-mcpb-linux-arm64.mcpb</a></td>
     </tr>
   </tbody>
 </table>
@@ -175,20 +175,32 @@ If you prefer to build from source or configure manually:
 ### HTTP Mode
 
 1. **Start the emulator manually** with HTTP transport:
+
    ```bash
    ./gearlynx --mcp-http
-  # Server will start on http://127.0.0.1:7777/mcp
-   
-   # Or specify a custom port:
-   ./gearlynx --mcp-http --mcp-http-port 3000
-  # Server will start on http://127.0.0.1:3000/mcp
-
-  # Or specify a custom bind address:
-  ./gearlynx --mcp-http --mcp-http-address 192.168.1.50 --mcp-http-port 3000
-  # Server will start on http://192.168.1.50:3000/mcp
   ```
 
-  To require bearer-token authentication, set `GEARLYNX_MCP_HTTP_TOKEN` before starting HTTP mode:
+  The default endpoint is `http://127.0.0.1:7777/mcp`.
+
+  To use a custom port:
+
+  ```bash
+   ./gearlynx --mcp-http --mcp-http-port 3000
+  ```
+
+  To bind to a custom address:
+
+  ```bash
+  ./gearlynx --mcp-http --mcp-http-address 192.168.1.50 --mcp-http-port 3000
+  ```
+
+  You can also start the server using the "MCP" menu in the GUI.
+
+2. **Optional: require bearer-token authentication**:
+
+  Set `GEARLYNX_MCP_HTTP_TOKEN` before starting HTTP mode.
+
+  macOS and Linux:
 
   ```bash
   GEARLYNX_MCP_HTTP_TOKEN="change-this-token" ./gearlynx --mcp-http
@@ -208,9 +220,8 @@ If you prefer to build from source or configure manually:
   gearlynx.exe --mcp-http
    ```
 
-   You can optionally start the server using the "MCP" menu in the GUI.
+3. **Configure VS Code** `.vscode/mcp.json`:
 
-2. **Configure VS Code** `.vscode/mcp.json`:
    ```json
    {
      "servers": {
@@ -225,7 +236,8 @@ If you prefer to build from source or configure manually:
    }
    ```
 
-3. **Or configure Claude Desktop**:
+4. **Or configure Claude Desktop**:
+
    ```json
    {
      "mcpServers": {
@@ -240,14 +252,18 @@ If you prefer to build from source or configure manually:
    }
    ```
 
-4. **Or configure Claude Code**:
+5. **Or configure Claude Code**:
+
    ```bash
   claude mcp add --transport http gearlynx http://127.0.0.1:7777/mcp
    ```
 
-5. **Restart your AI client** and start debugging
+6. **Restart your AI client** and start debugging
 
+> **Note:** The MCP HTTP Server must be running standalone before connecting the AI client.
 > **Security:** If `GEARLYNX_MCP_HTTP_TOKEN` is unset, HTTP mode accepts unauthenticated requests from clients that pass the configured `Host` and `Origin` checks. The default bind address is local-only; use a non-loopback address only on trusted networks or with bearer-token authentication enabled.
+
+## Usage Examples
 
 Once configured, you can ask your AI assistant:
 
@@ -267,13 +283,9 @@ Once configured, you can ask your AI assistant:
 ### Advanced Debugging Workflows
 
 - "Find the VBlank interrupt handler, analyze what it does, and add symbols for all the subroutines it calls"
-
 - "Locate the sprite update routine. Study how this game manages its sprite system, explain the algorithm, and add bookmarks to key sections. Also add watches for any sprite-related variables you find"
-
 - "There's a data decompression routine around address 0xC000. Step through it instruction by instruction, reverse engineer the compression algorithm, and explain how it works with examples"
-
 - "Find where the game stores its level data in ROM. Analyze the data structure format, create a memory map showing each section, and add symbols for the data tables"
-
 - "The game is rendering corrupted graphics. Examine the Suzy registers, check the VIDBAS frame buffer, inspect the Mikey display settings, and diagnose what's causing the corruption. Set up watches on relevant memory addresses"
 
 ## Available MCP Tools
@@ -286,7 +298,7 @@ The server exposes tools organized in the following categories:
 - `debug_step_into` - Step into next 6502 instruction (enters subroutines)
 - `debug_step_over` - Step over next 6502 instruction (skips subroutines like JSR)
 - `debug_step_out` - Step out of current subroutine (continues until RTS/RTI)
-- `debug_step_frame` - Step one video frame (executes until next VBLANK)
+- `debug_step_frame` - Step one or more video frames
 - `debug_run_to_cursor` - Continue execution until reaching specified address
 - `debug_reset` - Reset the Atari Lynx emulated system
 - `debug_get_status` - Get debugger status (paused, at_breakpoint, pc address)
@@ -316,7 +328,7 @@ The server exposes tools organized in the following categories:
 - `add_symbol` - Add symbol (label) at specified address
 - `remove_symbol` - Remove symbol
 - `list_symbols` - List all defined symbols
-- `load_symbols` - Load debug symbols from file (.sym format with 'ADDRESS LABEL' entries)
+- `load_symbols` - Load debug symbols from file (.sym ADDRESS LABEL, llvm-nm text, llvm-mos ELF, and other supported label formats)
 - `add_disassembler_bookmark` - Add bookmark in disassembler
 - `remove_disassembler_bookmark` - Remove disassembler bookmark
 - `list_disassembler_bookmarks` - List all disassembler bookmarks
@@ -352,7 +364,7 @@ The server exposes tools organized in the following categories:
 ### Media & State Management
 - `get_media_info` - Get loaded ROM info (file path, type, size, CRC, rotation, EEPROM, BIOS status)
 - `list_recent_media` - List the 10 most recent ROM files opened by Gearlynx
-- `load_media` - Load ROM file (.lnx, .lyx, .o, .zip). Automatically loads symbol file if present (.sym, .lbl, .noi)
+- `load_media` - Load ROM file (.lnx, .lyx, .o, .zip). Automatically loads symbol file if present (.sym, .elf, .lbl, .noi)
 - `load_bios` - Load BIOS file (must be exactly 512 bytes).
 - `list_save_state_slots` - List all 5 save state slots with information (rom name, timestamp, screenshot availability)
 - `select_save_state_slot` - Select active save state slot (1-5) for save/load operations
@@ -365,6 +377,7 @@ The server exposes tools organized in the following categories:
 
 ### Controller Input
 - `controller_button` - Control a button on the Lynx controller. Use action 'press' to hold, 'release' to let go, or 'press_and_release' for a quick tap. Buttons: up, down, left, right, a, b, option1, option2, pause
+- `controller_macro` - Run an ordered input macro. Supported commands are `tap`, `press`, `release`, and `wait`; timing is explicit through `wait` frame counts
 
 ## Available MCP Resources
 
