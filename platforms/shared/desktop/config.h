@@ -32,7 +32,7 @@
     #define EXTERN extern
 #endif
 
-static const int config_version = 2;
+static const int config_version = 4;
 static const int config_max_recent_roms = 10;
 static const int config_memory_editor_count = 9;
 
@@ -49,6 +49,13 @@ enum config_Theme
     config_Theme_Count = 2
 };
 
+enum config_VideoSync
+{
+    config_VideoSync_Disabled = 0,
+    config_VideoSync_Fixed = 1,
+    config_VideoSync_VRR = 2
+};
+
 struct config_Emulator
 {
     bool maximized = false;
@@ -62,6 +69,7 @@ struct config_Emulator
     bool pause_when_inactive = true;
     bool ffwd = false;
     int ffwd_speed = 1;
+    int runahead = 0;
     bool fast_sprite_rendering = false;
     bool show_info = false;
     std::string recent_roms[config_max_recent_roms];
@@ -88,7 +96,7 @@ struct config_Video
     int ratio = 0;
     int rotation = 0;
     bool fps = false;
-    bool sync = true;
+    int sync_mode = config_VideoSync_Disabled;
     float background_color[config_Theme_Count][3] = {
         {128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f},
         {0.1f, 0.1f, 0.1f}
@@ -206,6 +214,9 @@ struct config_Debug
     bool show_suzy_regs = false;
     bool show_suzy_math_regs = false;
     bool show_scb_viewer = false;
+    int sprite_bounding_box_mode = GLYNX_SPRITE_BOUNDING_BOX_DISABLED;
+    int sprite_bounding_box_color = 0;
+    int sprite_bounding_box_decay = 0;
     int scb_viewer_address = 0x0000;
     bool scb_viewer_auto = true;
     int scb_viewer_mode = 1;
@@ -238,6 +249,7 @@ struct config_Debug
     bool dis_dim_auto_symbols = false;
     bool dis_replace_symbols = true;
     bool dis_replace_labels = true;
+    int dis_syntax = GLYNX_Disassembler_Syntax_Gearlynx;
     int dis_look_ahead_count = 20;
     bool step_skip_interrupts = false;
     bool pause_on_brk = false;

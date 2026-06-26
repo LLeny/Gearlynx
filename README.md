@@ -30,11 +30,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-windows-x64.zip">Gearlynx-1.2.14-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-windows-x64.zip">Gearlynx-1.2.15-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-windows-arm64.zip">Gearlynx-1.2.14-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-windows-arm64.zip">Gearlynx-1.2.15-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td rowspan="3"><strong>macOS</strong></td>
@@ -43,11 +43,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-macos-arm64.zip">Gearlynx-1.2.14-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-macos-arm64.zip">Gearlynx-1.2.15-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-macos-intel.zip">Gearlynx-1.2.14-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-macos-intel.zip">Gearlynx-1.2.15-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>Linux</strong></td>
@@ -60,15 +60,15 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.14-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.15-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.14-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.15-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.14-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.15-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td><strong>MCPB</strong></td>
@@ -99,6 +99,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 - User selectable Lynx I or Lynx II emulation.
 - Compressed and homebrew ROM support (lnx, lyx, o, and zip).
 - Save states with preview and rewind support.
+- Run-ahead support to reduce input latency.
 - Very accurate audio emulation with configurable low-pass filter (mimics original Lynx audio hardware).
 - VGM recorder.
 - Internal database for automatic ROM detection and hardware selection if `Auto` options are selected.
@@ -126,6 +127,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 - **Multi-viewport**: In Windows or macOS, you can enable "multi-viewport" in the debug menu. You must restart the emulator for the change to take effect. Once enabled, you can drag debugger windows outside the main window.
 - **Single Instance**: You can enable "Single Instance" in the `Emulator` menu. When enabled, opening a ROM while another instance is running will send the ROM to the running instance instead of starting a new one.
 - **Debug Symbols**: The emulator automatically tries to load a symbol file when loading a ROM. For example, for `path_to_rom_file.rom` it tries to load `path_to_rom_file.sym`, `path_to_rom_file.elf`, the loaded-file sidecar `path_to_rom_file.rom.elf`, `path_to_rom_file.lbl` and `path_to_rom_file.noi`. You can also load symbol files using the GUI or the CLI. It supports *cc65* (VICE label file), *lyxass* (EQU), *mads* (lab and hea), *llvm-nm*, *llvm-mos* ELF and *vicelbl* label formats.
+- **Sprite Bounding Box**: Homebrew and debug builds can draw colored ImGui outlines after Suzy finishes rendering sprites. It can draw all sprites or only SCBs with `SPRCOLL` bit 7 (`$80`) set. Real Lynx hardware ignores this bit, but production builds should clear it.
 - **Debug Output**: Homebrew games can send debug text to the Trace Logger window using unused Mikey registers `$FDC0`–`$FDC4`. Enable *Debug Output* in the Trace Logger *Settings* menu and make sure the *Debug Messages* filter is active. See the register protocol below.
 
 | Register | Write |
@@ -149,9 +151,12 @@ Options:
   -w, --windowed           Start in windowed mode with menu visible
       --mcp-stdio          Auto-start MCP server with stdio transport
       --mcp-http           Auto-start MCP server with HTTP transport
+      --mcp-no-router      Expose all MCP tools directly
       --mcp-http-address A HTTP bind address (default: 127.0.0.1)
       --mcp-http-port N    HTTP port for MCP server (default: 7777)
-      --headless           Run without GUI (requires --mcp-stdio or --mcp-http)
+      --debug-monitor      Start debug monitor TCP server (default port: 6502)
+      --debug-monitor-port N Debug monitor port (default: 6502)
+      --headless           Run without GUI (requires --mcp-stdio, --mcp-http, or --debug-monitor)
   -v, --version            Display version information
   -h, --help               Display this help message
 ```
@@ -161,6 +166,13 @@ Options:
 Gearlynx includes a [Model Context Protocol](https://modelcontextprotocol.io/introduction) (MCP) server that enables AI-assisted debugging through AI agents like GitHub Copilot, Claude, Codex and similar. The server provides tools for execution control, memory inspection, breakpoints, disassembly, hardware status, rewind and more. HTTP transport binds to `127.0.0.1` by default, validates `Host` and browser `Origin` values against the configured endpoint, and can require bearer-token auth with the `GEARLYNX_MCP_HTTP_TOKEN` environment variable.
 
 For complete setup instructions and tool documentation, see [MCP_README.md](MCP_README.md).
+
+### VS Code Extension
+
+A source-level debugger for VS Code -- **LynxDebug** -- lives in its own repository:
+[BrianPeek/gearlynx-vscode](https://github.com/BrianPeek/gearlynx-vscode). It drives
+Gearlynx over the debug-monitor protocol (`--debug-monitor`). The wire contract is
+documented in [VSCODE_PROTOCOL_README.md](VSCODE_PROTOCOL_README.md).
 
 ### Agent Skills
 

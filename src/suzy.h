@@ -22,12 +22,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include "common.h"
 #include "suzy_defines.h"
-
-#if !defined(GLYNX_DISABLE_DISASSEMBLER)
-#include <vector>
-#endif
 
 class Media;
 class Memory;
@@ -135,6 +132,15 @@ public:
     void SetTraceLogger(TraceLogger* trace_logger);
 
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    struct GLYNX_Sprite_Bounding_Box
+    {
+        s32 x0;
+        s32 y0;
+        s32 x1;
+        s32 y1;
+        u8 frames_left;
+    };
+
     struct GLYNX_SCB_Info
     {
         u16 scb_address;
@@ -157,6 +163,10 @@ public:
     std::vector<GLYNX_SCB_Info>* GetFrameSCBList();
     void SwapFrameSCBList();
     void SetSCBAccumulationEnabled(bool enabled);
+    void SetSpriteBoundingBox(GLYNX_Sprite_Bounding_Box_Mode mode, int decay);
+    std::vector<GLYNX_Sprite_Bounding_Box>* GetSpriteBoundingBoxList();
+    void BeginSpriteBoundingBoxFrame();
+    void EndSpriteBoundingBoxFrame();
 #endif
 
     void SaveState(std::ostream& stream);
@@ -200,6 +210,10 @@ private:
     bool DrawSpriteLineLiteralStep(u16 data_end, s32 dx, int bpp, int type, bool collide, u8 collision_id);
     bool DrawSpriteLinePackedStep(u16 data_end, s32 dx, int bpp, int type, bool collide, u8 collision_id);
     bool DrawSpriteEmitPen(u8 pen, s32 dx, int type, bool collide, u8 collision_id);
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    void BeginSpriteBoundingBox();
+    void AddSpriteBoundingBox();
+#endif
     void AddPackedPixelTicks();
     void DrawPixel(s32 x, s32 y, u8 pen, int type, bool collide, u8 collision_id);
     u8 RamRead(u16 address);
@@ -233,6 +247,16 @@ private:
     QuadPos m_quad_lut[4][4][4] = {};
     bool m_fast_sprite_rendering;
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    GLYNX_Sprite_Bounding_Box_Mode m_sprite_bounding_box_mode;
+    int m_sprite_bounding_box_decay;
+    bool m_sprite_bounding_box_active;
+    bool m_sprite_bounding_box_valid;
+    s32 m_sprite_bounding_box_min_x;
+    s32 m_sprite_bounding_box_min_y;
+    s32 m_sprite_bounding_box_max_x;
+    s32 m_sprite_bounding_box_max_y;
+    std::vector<GLYNX_Sprite_Bounding_Box> m_sprite_bounding_box_list;
+    std::vector<GLYNX_Sprite_Bounding_Box> m_sprite_bounding_box_list_display;
     std::vector<GLYNX_SCB_Info> m_frame_scb_list;
     std::vector<GLYNX_SCB_Info> m_frame_scb_list_display;
     bool m_scb_accumulation_enabled;

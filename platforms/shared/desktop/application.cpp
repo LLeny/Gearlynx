@@ -125,13 +125,18 @@ int application_init(const ApplicationParams& params)
     if (config_emulator.fullscreen)
         application_trigger_fullscreen(true);
 
-    if (IsValidPointer(params.rom_file) && (strlen(params.rom_file) > 0))
+    bool rom_file_argument = IsValidPointer(params.rom_file) && (strlen(params.rom_file) > 0);
+    bool symbol_file_argument = IsValidPointer(params.symbol_file) && (strlen(params.symbol_file) > 0);
+
+    if (rom_file_argument)
     {
         Log("Rom file argument: %s", params.rom_file);
-        gui_load_rom(params.rom_file);
+        if (symbol_file_argument)
+            Log("Symbol file argument: %s", params.symbol_file);
+        gui_load_rom(params.rom_file, params.symbol_file);
     }
 
-    if (IsValidPointer(params.symbol_file) && (strlen(params.symbol_file) > 0))
+    if (!rom_file_argument && symbol_file_argument)
     {
         Log("Symbol file argument: %s", params.symbol_file);
         gui_debug_reset_symbols();
@@ -148,6 +153,12 @@ int application_init(const ApplicationParams& params)
         config_debug.debug = true;
         emu_mcp_set_transport(params.mcp_mode, params.mcp_tcp_port, mcp_http_address);
         emu_mcp_start();
+    }
+
+    if (params.debug_monitor_port > 0)
+    {
+        config_debug.debug = true;
+        emu_debug_monitor_start(params.debug_monitor_port);
     }
 
     application_refocus_window();
@@ -368,7 +379,7 @@ static bool sdl_init(void)
     }
 #endif
 
-    display_set_vsync(config_video.sync);
+    display_use_vsync_if_enabled();
     display_check_mixed_refresh_rates();
 
     SDL_SetWindowMinimumSize(application_sdl_window, (int)(500 * content_scale), (int)(300 * content_scale));
@@ -427,8 +438,8 @@ static void handle_single_instance(void)
     if (single_instance_get_pending_load(s_pending_rom_path, sizeof(s_pending_rom_path), s_pending_symbol_path, sizeof(s_pending_symbol_path)))
     {
         if (s_pending_rom_path[0] != '\0')
-            gui_load_rom(s_pending_rom_path);
-        if (s_pending_symbol_path[0] != '\0')
+            gui_load_rom(s_pending_rom_path, s_pending_symbol_path);
+        else if (s_pending_symbol_path[0] != '\0')
         {
             gui_debug_reset_symbols();
             gui_debug_load_symbols_file(s_pending_symbol_path);
@@ -495,14 +506,14 @@ static void sdl_events_app(const SDL_Event* event)
         }
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
         {
-            display_set_vsync(config_video.sync);
+            display_use_vsync_if_enabled();
             if (config_emulator.pause_when_inactive && !paused_when_focus_lost)
                 emu_resume();
             break;
         }
         case SDL_EVENT_WINDOW_FOCUS_LOST:
         {
-            display_set_vsync(false);
+            display_disable_vsync();
             if (config_emulator.pause_when_inactive)
             {
                 paused_when_focus_lost = emu_is_paused();
@@ -517,7 +528,7 @@ static void sdl_events_app(const SDL_Event* event)
             {
                 current_display_id = new_display;
                 display_check_mixed_refresh_rates();
-                if (config_video.sync && !display_is_vsync_forced_off())
+                if (config_video.sync_mode != config_VideoSync_Disabled && !display_is_vsync_forced_off())
                     display_recreate_gl_context();
                 else
                 {

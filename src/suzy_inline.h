@@ -646,6 +646,52 @@ INLINE void Suzy::SetSCBAccumulationEnabled(bool enabled)
 }
 #endif
 
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+INLINE void Suzy::BeginSpriteBoundingBoxFrame()
+{
+    m_sprite_bounding_box_list.clear();
+
+    if (m_sprite_bounding_box_mode == GLYNX_SPRITE_BOUNDING_BOX_DISABLED)
+        m_sprite_bounding_box_list_display.clear();
+}
+
+INLINE void Suzy::EndSpriteBoundingBoxFrame()
+{
+    if (m_sprite_bounding_box_mode == GLYNX_SPRITE_BOUNDING_BOX_DISABLED)
+    {
+        m_sprite_bounding_box_list.clear();
+        m_sprite_bounding_box_list_display.clear();
+        return;
+    }
+
+    size_t write_index = 0;
+    for (size_t i = 0; i < m_sprite_bounding_box_list_display.size(); i++)
+    {
+        GLYNX_Sprite_Bounding_Box box = m_sprite_bounding_box_list_display[i];
+        if (box.frames_left == 0)
+            continue;
+
+        box.frames_left--;
+        m_sprite_bounding_box_list_display[write_index++] = box;
+    }
+    m_sprite_bounding_box_list_display.resize(write_index);
+
+    for (size_t i = 0; i < m_sprite_bounding_box_list.size(); i++)
+    {
+        GLYNX_Sprite_Bounding_Box box = m_sprite_bounding_box_list[i];
+        box.frames_left = (u8)m_sprite_bounding_box_decay;
+        m_sprite_bounding_box_list_display.push_back(box);
+    }
+
+    m_sprite_bounding_box_list.clear();
+}
+
+INLINE std::vector<Suzy::GLYNX_Sprite_Bounding_Box>* Suzy::GetSpriteBoundingBoxList()
+{
+    return &m_sprite_bounding_box_list_display;
+}
+#endif
+
 INLINE void Suzy::SpritesGo()
 {
     DebugSuzy("SpritesGo called: SPRCTL0=%02X, SPRCTL1=%02X, SPRCOLL=%02X, SPRINIT=%02X",
@@ -810,6 +856,9 @@ INLINE void Suzy::StepBlitterPhase()
             m_state.sprite_cycles += 5 * k_suzy_ram_read_ticks;
             m_state.fred = 0;
             m_state.everon = false;
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+            BeginSpriteBoundingBox();
+#endif
 
             if (IS_SET_BIT(m_state.SPRCTL1, 2))
             {
@@ -1194,6 +1243,10 @@ INLINE void Suzy::StepBlitterPhase()
                 RamWrite(colpos, depository);
             }
 
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+            AddSpriteBoundingBox();
+#endif
+
             m_state.fsm_phase = SUZY_PHASE_SCB_NEXT;
             break;
         }
@@ -1369,6 +1422,9 @@ INLINE void Suzy::DrawSprite()
     m_state.SCBNEXT.value = RamReadWord(m_state.TMPADR.value);
     m_state.TMPADR.value += 2;
     m_state.sprite_cycles += 5 * k_suzy_ram_read_ticks;  // 5 bytes from SCB header
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    BeginSpriteBoundingBox();
+#endif
 
     if (IS_SET_BIT(m_state.SPRCTL1, 2))
     {
@@ -1666,7 +1722,43 @@ INLINE void Suzy::DrawSprite()
         depository = m_state.everon ? UNSET_BIT(depository, 7) : SET_BIT(depository, 7);
         RamWrite(colpos, depository);
     }
+
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    AddSpriteBoundingBox();
+#endif
 }
+
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+INLINE void Suzy::BeginSpriteBoundingBox()
+{
+    m_sprite_bounding_box_active = false;
+
+    if (unlikely(m_sprite_bounding_box_mode != GLYNX_SPRITE_BOUNDING_BOX_DISABLED))
+    {
+        m_sprite_bounding_box_active = 
+                (m_sprite_bounding_box_mode == GLYNX_SPRITE_BOUNDING_BOX_ALL) || 
+                ((m_sprite_bounding_box_mode == GLYNX_SPRITE_BOUNDING_BOX_SPRCOLL_BIT_7) && IS_SET_BIT(m_state.SPRCOLL, 7));
+        m_sprite_bounding_box_valid = false;
+        m_sprite_bounding_box_min_x = 0x7FFFFFFF;
+        m_sprite_bounding_box_min_y = 0x7FFFFFFF;
+        m_sprite_bounding_box_max_x = -0x7FFFFFFF;
+        m_sprite_bounding_box_max_y = -0x7FFFFFFF;
+    }
+}
+
+INLINE void Suzy::AddSpriteBoundingBox()
+{
+    if (!m_sprite_bounding_box_active || !m_sprite_bounding_box_valid)
+        return;
+
+    GLYNX_Sprite_Bounding_Box box = {};
+    box.x0 = m_sprite_bounding_box_min_x;
+    box.y0 = m_sprite_bounding_box_min_y;
+    box.x1 = m_sprite_bounding_box_max_x;
+    box.y1 = m_sprite_bounding_box_max_y;
+    m_sprite_bounding_box_list.push_back(box);
+}
+#endif
 
 INLINE void Suzy::DrawSpriteLineLiteral(u16 data_begin, u16 data_end,
                                         s32 x, s32 y, s32 dx,
@@ -1826,6 +1918,17 @@ INLINE void Suzy::DrawPixel(s32 x, s32 y, u8 pen, int type, bool collide, u8 col
         return;
     if ((u32)y >= (u32)GLYNX_SCREEN_HEIGHT)
         return;
+
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    if (unlikely(m_sprite_bounding_box_active))
+    {
+        m_sprite_bounding_box_valid = true;
+        m_sprite_bounding_box_min_x = MIN(m_sprite_bounding_box_min_x, x);
+        m_sprite_bounding_box_min_y = MIN(m_sprite_bounding_box_min_y, y);
+        m_sprite_bounding_box_max_x = MAX(m_sprite_bounding_box_max_x, x);
+        m_sprite_bounding_box_max_y = MAX(m_sprite_bounding_box_max_y, y);
+    }
+#endif
 
     m_state.everon = true;
     bool transparent = false;

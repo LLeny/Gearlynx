@@ -18,29 +18,29 @@ This server provides tools for game development, rom hacking, reverse engineerin
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-windows-x64.mcpb">Gearlynx-1.2.14-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-windows-x64.mcpb">Gearlynx-1.2.15-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-windows-arm64.mcpb">Gearlynx-1.2.14-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-windows-arm64.mcpb">Gearlynx-1.2.15-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>macOS</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-macos-x64.mcpb">Gearlynx-1.2.14-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-macos-x64.mcpb">Gearlynx-1.2.15-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-macos-arm64.mcpb">Gearlynx-1.2.14-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-macos-arm64.mcpb">Gearlynx-1.2.15-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>Linux</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-linux-x64.mcpb">Gearlynx-1.2.14-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-linux-x64.mcpb">Gearlynx-1.2.15-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.14/Gearlynx-1.2.14-mcpb-linux-arm64.mcpb">Gearlynx-1.2.14-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-mcpb-linux-arm64.mcpb">Gearlynx-1.2.15-mcpb-linux-arm64.mcpb</a></td>
     </tr>
   </tbody>
 </table>
@@ -76,6 +76,31 @@ The HTTP transport mode runs the emulator with an embedded web server on `127.0.
 ### Headless Mode
 
 Add `--headless` to run without a GUI window. This is useful for servers, CLI agents, or any machine without a display. All MCP tools work identically in headless mode. Requires `--mcp-stdio` or `--mcp-http`.
+
+## MCP Tool Router
+
+By default, Gearlynx exposes a compact set of high-frequency tools directly and routes advanced debugger tools through lightweight discovery tools. This keeps MCP context small while preserving access to the full debugger surface.
+
+Direct tools: `load_media`, `get_media_info`, `debug_pause`, `debug_continue`, `debug_step_into`, `get_6502_status`, `read_memory`, `write_memory`, `get_disassembly`, `set_breakpoint`, `get_screenshot`, and `controller_button`.
+
+Router tools:
+
+- `list_tool_categories` lists routed tool categories with descriptions and tool counts.
+- `get_category_tools` lists routed tools in a category with compact descriptions.
+- `search_tools` searches direct and routed tools and returns compact category/tool/description matches.
+- `get_tool_info` returns one tool's real input schema and metadata.
+- `execute_tool` executes a routed tool by name with arguments. Use `get_tool_info` after discovery when you need the exact input schema.
+
+Example routed call:
+
+```json
+{
+  "name": "get_suzy_registers",
+  "arguments": {}
+}
+```
+
+Add `--mcp-no-router` to expose every MCP tool directly.
 
 ## Quick Start
 
@@ -289,6 +314,8 @@ Once configured, you can ask your AI assistant:
 - "The game is rendering corrupted graphics. Examine the Suzy registers, check the VIDBAS frame buffer, inspect the Mikey display settings, and diagnose what's causing the corruption. Set up watches on relevant memory addresses"
 
 ## Available MCP Tools
+
+This is the full tool catalog. By default, advanced tools are discoverable through `list_tool_categories`, `get_category_tools`, and `search_tools`, then invoked with `execute_tool`.
 
 The server exposes tools organized in the following categories:
 

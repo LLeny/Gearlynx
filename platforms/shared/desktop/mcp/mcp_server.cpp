@@ -24,6 +24,8 @@
 #include <fstream>
 #include "log.h"
 
+bool g_mcp_router_disabled = false;
+
 static void* ReaderThreadFunc(void* arg)
 {
     McpServer* server = (McpServer*)arg;
@@ -212,16 +214,8 @@ void McpServer::HandleInitialize(const json& request)
     SendResponse(response);
 }
 
-void McpServer::HandleToolsList(const json& request)
+json McpServer::BuildToolList()
 {
-    if (!request.contains("id"))
-    {
-        SendError(0, -32600, "Invalid Request: missing id");
-        return;
-    }
-
-    int64_t id = request["id"];
-
     json tools = json::array();
 
     // Execution control tools
@@ -708,7 +702,7 @@ void McpServer::HandleToolsList(const json& request)
     tools.push_back({
         {"name", "get_cart_status"},
         {"title", "Get Cartridge Status"},
-        {"description", "Read cartridge status: address generation, bank 0/1, AUDIN."},
+        {"description", "Read cartridge status: address generation, banks, AUDIN."},
         {"inputSchema", {
             {"type", "object"},
             {"additionalProperties", false}
@@ -1476,11 +1470,202 @@ void McpServer::HandleToolsList(const json& request)
         }}
     });
 
+    return tools;
+}
+
+void McpServer::HandleToolsList(const json& request)
+{
+    if (!request.contains("id"))
+    {
+        SendError(0, -32600, "Invalid Request: missing id");
+        return;
+    }
+
+    int64_t id = request["id"];
+
+    json tools = BuildToolList();
+
+    m_toolRegistry.SetTools(tools);
+
+    if (!g_mcp_router_disabled)
+    {
+        json visibleTools = m_toolRegistry.GetDirectTools();
+        AddRouterTools(visibleTools);
+        tools = visibleTools;
+    }
+
     json response;
     response["jsonrpc"] = "2.0";
     response["id"] = id;
     response["result"] = {
         {"tools", tools}
+    };
+
+    SendResponse(response);
+}
+
+void McpServer::EnsureToolRegistry()
+{
+    if (!m_toolRegistry.IsEmpty())
+        return;
+
+    m_toolRegistry.SetTools(BuildToolList());
+}
+
+
+void McpServer::AddRouterTools(json& tools)
+{
+    tools.push_back({
+        {"name", "list_tool_categories"},
+        {"title", "List Tool Categories"},
+        {"description", "List routed MCP tool categories with descriptions and tool counts. Use this first to discover advanced emulator/debugger tools."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "get_category_tools"},
+        {"title", "Get Category Tools"},
+        {"description", "List routed tools in a category with compact descriptions. Use category names returned by list_tool_categories, then call get_tool_info for one tool's input schema."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"category", {{"type", "string"}}}
+            }},
+            {"required", json::array({"category"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "get_tool_info"},
+        {"title", "Get Tool Info"},
+        {"description", "Return one MCP tool's title, description, category, direct/routed status, and real input schema. Use this after search_tools or get_category_tools before execute_tool."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"name", {{"type", "string"}}}
+            }},
+            {"required", json::array({"name"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "search_tools"},
+        {"title", "Search Tools"},
+        {"description", "Search direct and routed MCP tools by keyword, category, title, description, and aliases. Use this when you know what you want to do but not the tool name."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"query", {{"type", "string"}}}
+            }},
+            {"required", json::array({"query"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "execute_tool"},
+        {"title", "Execute Routed Tool"},
+        {"description", "Execute a routed MCP tool by name with arguments. Use get_category_tools or search_tools first to discover the tool name and input schema."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"name", {{"type", "string"}}},
+                {"arguments", {
+                    {"type", "object"},
+                    {"additionalProperties", true}
+                }}
+            }},
+            {"required", json::array({"name"})},
+            {"additionalProperties", false}
+        }}
+    });
+}
+
+json McpServer::HandleRouterListCategories()
+{
+    EnsureToolRegistry();
+
+    json stats = m_toolRegistry.GetStats();
+    stats["categories"] = m_toolRegistry.GetCategories();
+
+    return stats;
+}
+
+json McpServer::HandleRouterGetCategoryTools(const json& arguments)
+{
+    EnsureToolRegistry();
+
+    std::string category = arguments.value("category", "");
+
+    if (!m_toolRegistry.HasCategory(category))
+    {
+        return {
+            {"error", "Unknown category"},
+            {"category", category},
+            {"available_categories", m_toolRegistry.GetCategoryNames()}
+        };
+    }
+
+    return {
+        {"category", category},
+        {"title", m_toolRegistry.GetCategoryTitle(category)},
+        {"description", m_toolRegistry.GetCategoryDescription(category)},
+        {"tool_count", m_toolRegistry.GetCategoryToolCount(category)},
+        {"tools", m_toolRegistry.GetToolsInCategory(category)}
+    };
+}
+
+json McpServer::HandleRouterSearchTools(const json& arguments)
+{
+    EnsureToolRegistry();
+
+    std::string query = arguments.value("query", "");
+    json tools = m_toolRegistry.SearchTools(query);
+
+    return {
+        {"query", query},
+        {"count", tools.size()},
+        {"limit", m_toolRegistry.GetSearchToolLimit()},
+        {"matches", tools}
+    };
+}
+
+json McpServer::HandleRouterGetToolInfo(const json& arguments)
+{
+    EnsureToolRegistry();
+
+    std::string tool_name = arguments.value("name", "");
+    json tool = m_toolRegistry.GetToolInfo(tool_name);
+
+    if (tool.empty())
+    {
+        return {
+            {"error", "Unknown tool"},
+            {"name", tool_name},
+            {"hint", "Use search_tools or get_category_tools to discover available tool names."}
+        };
+    }
+
+    return tool;
+}
+
+void McpServer::SendToolResult(int64_t id, const json& result)
+{
+    json response;
+    response["jsonrpc"] = "2.0";
+    response["id"] = id;
+    response["result"] = {
+        {"content", json::array({
+            {
+                {"type", "text"},
+                {"text", result.dump(2, ' ', false, json::error_handler_t::replace)}
+            }
+        })}
     };
 
     SendResponse(response);
@@ -1504,6 +1689,55 @@ void McpServer::HandleToolsCall(const json& request)
 
     std::string toolName = request["params"]["name"];
     json arguments = request["params"].contains("arguments") ? request["params"]["arguments"] : json::object();
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName))
+        EnsureToolRegistry();
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "list_tool_categories"))
+    {
+        SendToolResult(id, HandleRouterListCategories());
+        return;
+    }
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "get_category_tools"))
+    {
+        SendToolResult(id, HandleRouterGetCategoryTools(arguments));
+        return;
+    }
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "get_tool_info"))
+    {
+        SendToolResult(id, HandleRouterGetToolInfo(arguments));
+        return;
+    }
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "search_tools"))
+    {
+        SendToolResult(id, HandleRouterSearchTools(arguments));
+        return;
+    }
+
+    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "execute_tool"))
+    {
+        if (!arguments.contains("name") || !arguments["name"].is_string())
+        {
+            SendError(id, -32602, "Invalid params: missing routed tool name");
+            return;
+        }
+
+        toolName = arguments["name"].get<std::string>();
+
+        if (!m_toolRegistry.HasTool(toolName))
+        {
+            SendToolResult(id, {{"error", "Unknown tool"}, {"name", toolName}});
+            return;
+        }
+
+        if (arguments.contains("arguments") && arguments["arguments"].is_object())
+            arguments = arguments["arguments"];
+        else
+            arguments = json::object();
+    }
 
     // Enqueue command for main thread to execute
     DebugCommand* cmd = new DebugCommand();
@@ -2166,8 +2400,13 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
     }
     else if (normalizedTool == "memory_find_bytes")
     {
-        int area = arguments["area"];
-        std::string hex_bytes = arguments["hex_bytes"];
+        if (!arguments.contains("area") || !arguments["area"].is_number_integer())
+            return {{"error", "area is required"}};
+        if (!arguments.contains("hex_bytes") || !arguments["hex_bytes"].is_string())
+            return {{"error", "hex_bytes is required"}};
+
+        int area = arguments["area"].get<int>();
+        std::string hex_bytes = arguments["hex_bytes"].get<std::string>();
         return m_debugAdapter.MemoryFindBytes(area, hex_bytes);
     }
     else if (normalizedTool == "get_trace_log")

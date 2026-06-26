@@ -187,12 +187,15 @@ void config_read(void)
 
     int file_version = read_int("General", "Version", 0);
 
-    if (file_version < config_version)
+    if (file_version < 2)
     {
         Log("Settings version %d is outdated (current: %d). Using defaults.", file_version, config_version);
         config_write();
         return;
     }
+
+    if (file_version < config_version)
+        Log("Migrating settings version %d to %d", file_version, config_version);
 
     Log("Loading settings from %s (version %d)", config_emu_file_path, file_version);
 
@@ -216,6 +219,12 @@ void config_read(void)
     config_debug.show_suzy_regs = read_bool("Debug", "SuzyRegs", false);
     config_debug.show_suzy_math_regs = read_bool("Debug", "SuzyMathRegs", false);
     config_debug.show_scb_viewer = read_bool("Debug", "SCBViewer", false);
+    config_debug.sprite_bounding_box_mode = read_int("Debug", "SpriteBoundingBoxMode", GLYNX_SPRITE_BOUNDING_BOX_DISABLED);
+    config_debug.sprite_bounding_box_mode = CLAMP(config_debug.sprite_bounding_box_mode, GLYNX_SPRITE_BOUNDING_BOX_DISABLED, GLYNX_SPRITE_BOUNDING_BOX_SPRCOLL_BIT_7);
+    config_debug.sprite_bounding_box_color = read_int("Debug", "SpriteBoundingBoxColor", 0);
+    config_debug.sprite_bounding_box_color = CLAMP(config_debug.sprite_bounding_box_color, 0, 7);
+    config_debug.sprite_bounding_box_decay = read_int("Debug", "SpriteBoundingBoxDecay", 0);
+    config_debug.sprite_bounding_box_decay = CLAMP(config_debug.sprite_bounding_box_decay, 0, 10);
     config_debug.scb_viewer_address = read_int("Debug", "SCBViewerAddress", 0x0000);
     config_debug.scb_viewer_auto = read_bool("Debug", "SCBViewerAuto", true);
     config_debug.scb_viewer_mode = read_int("Debug", "SCBViewerMode", 1);
@@ -248,6 +257,8 @@ void config_read(void)
     config_debug.dis_dim_auto_symbols = read_bool("Debug", "DisDimAutoSymbols", false);
     config_debug.dis_replace_symbols = read_bool("Debug", "DisReplaceSymbols", true);
     config_debug.dis_replace_labels = read_bool("Debug", "DisReplaceLabels", true);
+    config_debug.dis_syntax = read_int("Debug", "DisSyntax", GLYNX_Disassembler_Syntax_Gearlynx);
+    config_debug.dis_syntax = CLAMP(config_debug.dis_syntax, GLYNX_Disassembler_Syntax_Gearlynx, GLYNX_Disassembler_Syntax_Count - 1);
     config_debug.dis_look_ahead_count = read_int("Debug", "DisLookAheadCount", 20);
     config_debug.step_skip_interrupts = read_bool("Debug", "StepSkipInterrupts", false);
     config_debug.pause_on_brk = read_bool("Debug", "PauseOnBRK", false);
@@ -279,6 +290,8 @@ void config_read(void)
     config_emulator.theme = read_int("Emulator", "Theme", config_Theme_Dark);
     config_emulator.theme = CLAMP(config_emulator.theme, config_Theme_Light, config_Theme_Dark);
     config_emulator.ffwd_speed = read_int("Emulator", "FFWD", 1);
+    config_emulator.runahead = read_int("Emulator", "RunAhead", 0);
+    config_emulator.runahead = CLAMP(config_emulator.runahead, 0, 3);
     config_emulator.save_slot = read_int("Emulator", "SaveSlot", 0);
     config_emulator.save_slot = CLAMP(config_emulator.save_slot, 0, 4);
     config_emulator.fast_sprite_rendering = read_bool("Emulator", "FastSpriteRendering", false);
@@ -330,7 +343,19 @@ void config_read(void)
     config_video.shader_mode = read_int("Video", "ShaderMode", config_ShaderMode_PixelPerfect);
     config_video.shader_mode = CLAMP(config_video.shader_mode, config_ShaderMode_PixelPerfect, config_ShaderMode_External);
     config_video.shader_preset_path = read_string("Video", "ShaderPresetFile");
-    config_video.sync = read_bool("Video", "Sync", true);
+    config_video.sync_mode = read_int("Video", "SyncMode", -1);
+    if ((file_version < config_version) || (config_video.sync_mode < config_VideoSync_Disabled) || (config_video.sync_mode > config_VideoSync_VRR))
+    {
+        bool sync = read_bool("Video", "Sync", true);
+        bool vrr = read_bool("Video", "VRR", false);
+        config_video.sync_mode = sync ? (vrr ? config_VideoSync_VRR : config_VideoSync_Fixed) : config_VideoSync_Disabled;
+    }
+    else
+        config_video.sync_mode = CLAMP(config_video.sync_mode, config_VideoSync_Disabled, config_VideoSync_VRR);
+#if !defined(_WIN32)
+    if (config_video.sync_mode == config_VideoSync_VRR)
+    config_video.sync_mode = config_VideoSync_Fixed;
+#endif
     config_video.background_color[config_Theme_Dark][0] = read_float("Video", "BackgroundColorR", 0.1f);
     config_video.background_color[config_Theme_Dark][1] = read_float("Video", "BackgroundColorG", 0.1f);
     config_video.background_color[config_Theme_Dark][2] = read_float("Video", "BackgroundColorB", 0.1f);
@@ -450,6 +475,9 @@ void config_write(void)
     write_bool("Debug", "SuzyRegs", config_debug.show_suzy_regs);
     write_bool("Debug", "SuzyMathRegs", config_debug.show_suzy_math_regs);
     write_bool("Debug", "SCBViewer", config_debug.show_scb_viewer);
+    write_int("Debug", "SpriteBoundingBoxMode", config_debug.sprite_bounding_box_mode);
+    write_int("Debug", "SpriteBoundingBoxColor", config_debug.sprite_bounding_box_color);
+    write_int("Debug", "SpriteBoundingBoxDecay", config_debug.sprite_bounding_box_decay);
     write_int("Debug", "SCBViewerAddress", config_debug.scb_viewer_address);
     write_bool("Debug", "SCBViewerAuto", config_debug.scb_viewer_auto);
     write_int("Debug", "SCBViewerMode", config_debug.scb_viewer_mode);
@@ -483,6 +511,7 @@ void config_write(void)
     write_bool("Debug", "DisDimAutoSymbols", config_debug.dis_dim_auto_symbols);
     write_bool("Debug", "DisReplaceSymbols", config_debug.dis_replace_symbols);
     write_bool("Debug", "DisReplaceLabels", config_debug.dis_replace_labels);
+    write_int("Debug", "DisSyntax", config_debug.dis_syntax);
     write_int("Debug", "DisLookAheadCount", config_debug.dis_look_ahead_count);
     write_bool("Debug", "StepSkipInterrupts", config_debug.step_skip_interrupts);
     write_bool("Debug", "PauseOnBRK", config_debug.pause_on_brk);
@@ -510,6 +539,7 @@ void config_write(void)
     write_bool("Emulator", "AlwaysShowMenu", config_emulator.always_show_menu);
     write_int("Emulator", "Theme", config_emulator.theme);
     write_int("Emulator", "FFWD", config_emulator.ffwd_speed);
+    write_int("Emulator", "RunAhead", config_emulator.runahead);
     write_int("Emulator", "SaveSlot", config_emulator.save_slot);
     write_bool("Emulator", "FastSpriteRendering", config_emulator.fast_sprite_rendering);
     write_bool("Emulator", "StartPaused", config_emulator.start_paused);
@@ -543,7 +573,7 @@ void config_write(void)
     write_int("Video", "ShaderMode", config_video.shader_mode);
     write_string("Video", "ShaderPresetFile", get_filename(config_video.shader_preset_path.c_str()));
     sync_shader_preset_parameter_defaults();
-    write_bool("Video", "Sync", config_video.sync);
+    write_int("Video", "SyncMode", config_video.sync_mode);
     write_float("Video", "BackgroundColorR", config_video.background_color[config_Theme_Dark][0]);
     write_float("Video", "BackgroundColorG", config_video.background_color[config_Theme_Dark][1]);
     write_float("Video", "BackgroundColorB", config_video.background_color[config_Theme_Dark][2]);
