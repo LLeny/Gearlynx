@@ -30,11 +30,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-windows-x64.zip">Gearlynx-1.2.15-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-windows-x64.zip">Gearlynx-1.2.18-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-windows-arm64.zip">Gearlynx-1.2.15-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-windows-arm64.zip">Gearlynx-1.2.18-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td rowspan="3"><strong>macOS</strong></td>
@@ -43,11 +43,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-macos-arm64.zip">Gearlynx-1.2.15-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-macos-arm64.zip">Gearlynx-1.2.18-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-macos-intel.zip">Gearlynx-1.2.15-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-macos-intel.zip">Gearlynx-1.2.18-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>Linux</strong></td>
@@ -60,15 +60,15 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.15-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.18-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.15-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.18-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.15/Gearlynx-1.2.15-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.15-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.18/Gearlynx-1.2.18-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.18-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td><strong>MCPB</strong></td>
@@ -109,7 +109,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 - Supported platforms (libretro): Windows, Linux, macOS, Raspberry Pi, Android, iOS, tvOS, webOS, PlayStation Vita, PlayStation 3, Nintendo 3DS, Nintendo GameCube, Nintendo Wii, Nintendo WiiU, Nintendo Switch, Emscripten, Classic Mini systems (NES, SNES, C64, ...), OpenDingux, RetroFW and QNX.
 - Full debugger with just-in-time run-ahead disassembler that can handle self-modifying code, CPU and memory breakpoints, code navigation (goto address, JP JR and JSR double clicking), debug symbols, automatic labels, memory editor, memory search, Suzy and Mikey register viewer, audio channels, UART, cartridge and video inspector.
 - MCP server for AI-assisted debugging with GitHub Copilot, Claude, Codex and similar, exposing tools for execution control, memory inspection, hardware status, rewind and more.
-- Windows and Linux *Portable Mode*.
+- Windows, Linux and macOS *Portable Mode*.
 - [Programmable Shader Chain](platforms/shared/desktop/shaders/README.md).
 - ROM loading from the command line by adding the ROM path as an argument.
 - ROM loading using drag & drop.
@@ -120,7 +120,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 ### Basic Usage
 - **BIOS**: Gearlynx requires a BIOS to work. It is possible to load any BIOS but the original with md5 `fcd403db69f54290b51035d82f835e7b` is recommended.
 - **Mouse Cursor**: Automatically hides when hovering over the main output window or when Main Menu is disabled.
-- **Portable Mode**: Create an empty file named `portable.ini` in the same directory as the application binary to enable portable mode.
+- **Portable Mode**: Create an empty file named `portable.ini` in the same directory as the application binary to enable portable mode. On macOS, place the file next to the `.app` bundle.
 
 ### Debugging Features
 - **Docking Windows**: In debug mode, you can dock windows together by pressing SHIFT and dragging a window onto another.
