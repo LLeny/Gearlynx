@@ -156,26 +156,26 @@ INLINE u8 Suzy::Read(u16 address)
     case SUZY_PROCADRH:    // 0xFC2F
         return m_state.PROCADR.high;
     case SUZY_SPRCTL0:     // 0xFC80
-        DebugSuzy("Reading write-only SPRCTL0: %02X", m_state.SPRCTL0);
+        DebugSuzy("Reading write-only SPRCTL0: FF");
         return 0xFF;
     case SUZY_SPRCTL1:     // 0xFC81
-        DebugSuzy("Reading write-only SPRCTL1: %02X", m_state.SPRCTL1);
+        DebugSuzy("Reading write-only SPRCTL1: FF");
         return 0xFF;
     case SUZY_SPRCOLL:     // 0xFC82
-        DebugSuzy("Reading write-only SPRCOLL: %02X", m_state.SPRCOLL);
+        DebugSuzy("Reading write-only SPRCOLL: FF");
         return 0xFF;
     case SUZY_SPRINIT:     // 0xFC83
-        DebugSuzy("Reading write-only SPRINIT: %02X", m_state.SPRINIT);
+        DebugSuzy("Reading write-only SPRINIT: FF");
         return 0xFF;
     case SUZY_SUZYHREV:    // 0xFC88
         return 0x01;
     case SUZY_SUZYSREV:    // 0xFC89
         return 0xFF;
     case SUZY_SUZYBUSEN:   // 0xFC90
-        DebugSuzy("Reading write-only SUZYBUSEN: %02X", m_state.SUZYBUSEN);
+        DebugSuzy("Reading write-only SUZYBUSEN: FF");
         return 0xFF;
     case SUZY_SPRGO:       // 0xFC91
-        DebugSuzy("Reading write-only SPRGO: %02X", m_state.SPRGO);
+        DebugSuzy("Reading write-only SPRGO: FF");
         return 0xFF;
     case SUZY_SPRSYS:      // 0xFC92
     {
@@ -967,13 +967,11 @@ INLINE void Suzy::StepBlitterPhase()
 
         case SUZY_PHASE_PALETTE:
         {
-            int bpp = ((m_state.SPRCTL0 >> 6) & 0x03) + 1;
             bool reload_palette = IS_NOT_SET_BIT(m_state.SPRCTL1, 3);
 
             if (reload_palette)
             {
-                int colors = 1 << bpp;
-                int bytes_to_read = colors >> 1;
+                const int bytes_to_read = 8;
                 m_state.sprite_cycles += bytes_to_read * k_suzy_ram_read_ticks;
 
                 for (int i = 0; i < bytes_to_read; ++i)
@@ -1016,7 +1014,7 @@ INLINE void Suzy::StepBlitterPhase()
                 e.sprite.hpos = (s16)m_state.HPOSSTRT.value;
                 e.sprite.vpos = (s16)m_state.VPOSSTRT.value;
                 e.sprite.sprctl0 = m_state.SPRCTL0;
-                e.sprite.bpp = (u8)bpp;
+                e.sprite.bpp = (u8)(((m_state.SPRCTL0 >> 6) & 0x03) + 1);
                 e.sprite.type = (u8)(m_state.SPRCTL0 & 0x07);
                 m_trace_logger->TraceLog(e);
             }
@@ -1031,9 +1029,13 @@ INLINE void Suzy::StepBlitterPhase()
             m_state.HPOSSTRT.value = (u16)((s16)m_state.HPOSSTRT.value - (s16)m_state.HOFF.value);
             m_state.VPOSSTRT.value = (u16)((s16)m_state.VPOSSTRT.value - (s16)m_state.VOFF.value);
             m_state.spr_quadrant = 0;
+            bool start_up = IS_SET_BIT(m_state.SPRCTL1, 1);
+            bool start_left = IS_SET_BIT(m_state.SPRCTL1, 0);
+            int start_quad = (start_left ? 1 : 0) | (start_up ? 2 : 0);
+            QuadPos size_pos = m_quad_lut[m_state.spr_quadrant][start_quad][0];
             m_state.TILTACUM.value = 0;
             m_state.SPRVPOS.value = m_state.VPOSSTRT.value;
-            m_state.VSIZACUM.value = m_state.VSIZOFF.value;
+            m_state.VSIZACUM.value = size_pos.up ? 0 : m_state.VSIZOFF.value;
             m_state.fsm_phase = SUZY_PHASE_LINE_FETCH;
             break;
         }
@@ -1076,6 +1078,7 @@ INLINE void Suzy::StepBlitterPhase()
             int flip = (h_flip ? 1 : 0) | (v_flip ? 2 : 0);
             int start_quad = (start_left ? 1 : 0) | (start_up ? 2 : 0);
             QuadPos pos = m_quad_lut[m_state.spr_quadrant][start_quad][flip];
+            QuadPos size_pos = m_quad_lut[m_state.spr_quadrant][start_quad][0];
             QuadPos start_pos = m_quad_lut[0][start_quad][flip];
             s32 dx = pos.left ? -1 : +1;
             s32 start_x = (s16)m_state.HPOSSTRT.value;
@@ -1085,7 +1088,7 @@ INLINE void Suzy::StepBlitterPhase()
 
             m_state.row_x = (s16)start_x;
             m_state.row_render = ((u32)(s16)m_state.SPRVPOS.value < (u32)GLYNX_SCREEN_HEIGHT) ? 1 : 0;
-            m_state.row_h_accum = m_state.HSIZOFF.value;
+            m_state.row_h_accum = size_pos.left ? 0 : m_state.HSIZOFF.value;
             m_state.row_emit_count = 0;
             m_state.row_pen = 0;
             m_state.pack_state = SUZY_PACK_HEADER;
@@ -1197,11 +1200,12 @@ INLINE void Suzy::StepBlitterPhase()
 
                 m_state.spr_quadrant = (m_state.spr_quadrant + 1) & 3;
                 QuadPos pos = m_quad_lut[m_state.spr_quadrant][start_quad][flip];
+                QuadPos size_pos = m_quad_lut[m_state.spr_quadrant][start_quad][0];
                 QuadPos start_pos = m_quad_lut[0][start_quad][flip];
                 s32 dy = pos.up ? -1 : +1;
 
                 m_state.SPRVPOS.value = m_state.VPOSSTRT.value;
-                m_state.VSIZACUM.value = m_state.VSIZOFF.value;
+                m_state.VSIZACUM.value = size_pos.up ? 0 : m_state.VSIZOFF.value;
 
                 if (pos.up != start_pos.up)
                     m_state.SPRVPOS.value = (u16)((s16)m_state.SPRVPOS.value + dy);
@@ -1529,8 +1533,7 @@ INLINE void Suzy::DrawSprite()
 
     if (reload_palette)
     {
-        int colors = 1 << bpp;
-        int bytes_to_read = colors >> 1;
+        const int bytes_to_read = 8;
         m_state.sprite_cycles += bytes_to_read * k_suzy_ram_read_ticks;  // palette bytes
 
         for (int i = 0; i < bytes_to_read; ++i)
@@ -1591,6 +1594,7 @@ INLINE void Suzy::DrawSprite()
 
     int quadrant = 0;
     QuadPos pos = m_quad_lut[quadrant][start_quad][flip];
+    QuadPos size_pos = m_quad_lut[quadrant][start_quad][0];
     QuadPos start_pos = pos;
 
     m_state.TILTACUM.value = 0;
@@ -1599,7 +1603,7 @@ INLINE void Suzy::DrawSprite()
     s32 dy = pos.up ? -1 : +1;
 
     s32 cur_y = base_vpos;
-    m_state.VSIZACUM.value = m_state.VSIZOFF.value;
+    m_state.VSIZACUM.value = size_pos.up ? 0 : m_state.VSIZOFF.value;
 
     while (true)
     {
@@ -1624,12 +1628,13 @@ INLINE void Suzy::DrawSprite()
             // advance to next quadrant
             quadrant = (quadrant + 1) & 3;
             pos = m_quad_lut[quadrant][start_quad][flip];
+            size_pos = m_quad_lut[quadrant][start_quad][0];
 
             dx = pos.left ? -1 : +1;
             dy = pos.up   ? -1 : +1;
 
             cur_y = base_vpos;
-            m_state.VSIZACUM.value = m_state.VSIZOFF.value;
+            m_state.VSIZACUM.value = size_pos.up ? 0 : m_state.VSIZOFF.value;
 
             if (pos.up != start_pos.up)
                 cur_y += dy;
@@ -1651,7 +1656,7 @@ INLINE void Suzy::DrawSprite()
             if (pos.left != start_pos.left)
                 start_x += dx;
 
-            u32 haccum_init = m_state.HSIZOFF.value;
+            u32 haccum_init = size_pos.left ? 0 : m_state.HSIZOFF.value;
 
             if (literal_only)
             {

@@ -18,6 +18,7 @@
  */
 
 #include "mcp_debug_adapter.h"
+#include "input.h"
 #include "log.h"
 #include "../utils.h"
 #include "../emu.h"
@@ -28,6 +29,7 @@
 #include "../gui_debug_memeditor.h"
 #include "../gui_debug_rewind.h"
 #include "../config.h"
+#include "../events.h"
 #include "../rewind.h"
 #include "mikey_defines.h"
 #include <cstring>
@@ -1864,6 +1866,8 @@ json DebugAdapter::ListSaveStateSlots()
     json slots = json::array();
     json empty_slots = json::array();
 
+    update_savestates_data();
+
     for (int i = 0; i < 5; i++)
     {
         json slot;
@@ -1948,6 +1952,8 @@ json DebugAdapter::LoadState()
 
     int slot = config_emulator.save_slot + 1;
 
+    update_savestates_data();
+
     if (emu_savestates[config_emulator.save_slot].rom_name[0] == 0)
     {
         result["error"] = "Save state slot is empty";
@@ -1959,6 +1965,71 @@ json DebugAdapter::LoadState()
 
     result["success"] = true;
     result["slot"] = slot;
+
+    return result;
+}
+
+json DebugAdapter::SaveStateFile(const std::string& file_path)
+{
+    json result;
+
+    if (file_path.empty())
+    {
+        result["error"] = "File path is required";
+        Log("[MCP] SaveStateFile failed: File path is required");
+        return result;
+    }
+
+    if (!m_core || !m_core->GetMedia()->IsReady())
+    {
+        result["error"] = "No media loaded";
+        Log("[MCP] SaveStateFile failed: No media loaded");
+        return result;
+    }
+
+    if (!m_core->SaveState(file_path.c_str(), -1, false))
+    {
+        result["error"] = "Failed to save state file";
+        Log("[MCP] SaveStateFile failed: %s", file_path.c_str());
+        return result;
+    }
+
+    result["success"] = true;
+    result["file_path"] = file_path;
+
+    return result;
+}
+
+json DebugAdapter::LoadStateFile(const std::string& file_path)
+{
+    json result;
+
+    if (file_path.empty())
+    {
+        result["error"] = "File path is required";
+        Log("[MCP] LoadStateFile failed: File path is required");
+        return result;
+    }
+
+    if (!m_core || !m_core->GetMedia()->IsReady())
+    {
+        result["error"] = "No media loaded";
+        Log("[MCP] LoadStateFile failed: No media loaded");
+        return result;
+    }
+
+    if (!m_core->LoadState(file_path.c_str()))
+    {
+        result["error"] = "Failed to load state file";
+        Log("[MCP] LoadStateFile failed: %s", file_path.c_str());
+        return result;
+    }
+
+    events_sync_input();
+    rewind_reset();
+
+    result["success"] = true;
+    result["file_path"] = file_path;
 
     return result;
 }
@@ -2049,6 +2120,26 @@ json DebugAdapter::ControllerButton(const std::string& button, const std::string
     result["action"] = action;
 
     return result;
+}
+
+json DebugAdapter::GetInputState()
+{
+    static const char* button_names[] = {"up", "down", "left", "right", "a", "b", "option1", "option2", "pause"};
+    static const GLYNX_Keys button_keys[] = {
+        GLYNX_KEY_UP, GLYNX_KEY_DOWN, GLYNX_KEY_LEFT, GLYNX_KEY_RIGHT, GLYNX_KEY_A,
+        GLYNX_KEY_B, GLYNX_KEY_OPTION1, GLYNX_KEY_OPTION2, GLYNX_KEY_PAUSE
+    };
+
+    json pressed = json::array();
+    Input* input = m_core->GetInput();
+
+    for (size_t i = 0; i < sizeof(button_keys) / sizeof(button_keys[0]); i++)
+    {
+        if (input->IsKeyPressed(button_keys[i]))
+            pressed.push_back(button_names[i]);
+    }
+
+    return {{"players", json::array({{{"player", 1}, {"pressed", pressed}}})}};
 }
 
 // Disassembler operations
@@ -2432,6 +2523,59 @@ json DebugAdapter::ListSymbols()
 
     result["symbols"] = symbols_array;
     result["count"] = symbols_array.size();
+
+    return result;
+}
+
+json DebugAdapter::LookupSymbolByName(const std::string& name)
+{
+    json result;
+
+    if (!m_core || !m_core->GetMedia()->IsReady())
+    {
+        result["error"] = "No media loaded";
+        return result;
+    }
+
+    std::vector<DebugSymbol*> symbols;
+    gui_debug_find_symbols(name.c_str(), symbols);
+
+    json matches = json::array();
+    for (size_t i = 0; i < symbols.size(); i++)
+    {
+        std::ostringstream address_ss;
+        address_ss << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << symbols[i]->address;
+
+        matches.push_back({
+            {"address", address_ss.str()},
+            {"name", symbols[i]->text}
+        });
+    }
+
+    result["matches"] = matches;
+    result["count"] = matches.size();
+    return result;
+}
+
+json DebugAdapter::LookupSymbolAtAddress(u16 address)
+{
+    json result;
+
+    if (!m_core || !m_core->GetMedia()->IsReady())
+    {
+        result["error"] = "No media loaded";
+        return result;
+    }
+
+    std::ostringstream address_ss;
+    address_ss << std::hex << std::uppercase << std::setfill('0') << std::setw(4) << address;
+
+    DebugSymbol* symbol = gui_debug_get_symbol(address);
+    result["found"] = IsValidPointer(symbol);
+    result["address"] = address_ss.str();
+
+    if (IsValidPointer(symbol))
+        result["name"] = symbol->text;
 
     return result;
 }

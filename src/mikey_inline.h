@@ -89,7 +89,7 @@ INLINE u8 Mikey::Read(u16 address)
             return ret;
         }
         case MIKEY_SYSCTL1:       // 0xFD87
-            DebugMikey("Reading write-only SYSCTL1: FF");
+            DebugMikey("Reading write-only SYSCTL1: 80");
             return 0x80;
         case MIKEY_MIKEYHREV:     // 0xFD88
             return m_is_lynx2 ? 0x02 : 0x01;
@@ -466,6 +466,11 @@ INLINE void Mikey::Write(u16 address, u8 value)
 INLINE Mikey::Mikey_State* Mikey::GetState()
 {
     return &m_state;
+}
+
+INLINE bool Mikey::IsPoweredOn()
+{
+    return IS_SET_BIT(m_state.SYSCTL1, 1);
 }
 
 INLINE LcdScreen* Mikey::GetLcdScreen()

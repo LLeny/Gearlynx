@@ -256,6 +256,9 @@ public:
 
             resp->result = m_server->ExecuteCommand(cmd->toolName, cmd->arguments);
 
+            if (is_get_input_state_command(cmd->toolName))
+                append_input_runtime_state(resp->result);
+
             update_response_error(resp);
             handle_controller_side_effects(core, resp->result);
 
@@ -291,13 +294,34 @@ private:
         return normalize_tool_name(tool_name) == "controller_macro";
     }
 
+    bool is_get_input_state_command(const std::string& tool_name) const
+    {
+        return normalize_tool_name(tool_name) == "get_input_state";
+    }
+
+    void append_input_runtime_state(json& result) const
+    {
+        if (result.contains("error"))
+            return;
+
+        json pending_releases = json::array();
+        for (size_t i = 0; i < m_delayedReleases.size(); i++)
+        {
+            pending_releases.push_back({
+                {"player", 1},
+                {"button", m_delayedReleases[i].button}
+            });
+        }
+
+        result["pending_releases"] = pending_releases;
+    }
+
     void update_response_error(DebugResponse* resp)
     {
         if (!resp->result.contains("error"))
             return;
 
-        resp->isError = true;
-        resp->errorCode = -32603;
+        resp->isToolError = true;
         resp->errorMessage = resp->result["error"];
     }
 
@@ -557,8 +581,7 @@ private:
 
         DebugResponse* resp = new DebugResponse();
         resp->requestId = m_inputMacro.request_id;
-        resp->isError = true;
-        resp->errorCode = -32603;
+        resp->isToolError = true;
         resp->errorMessage = error;
         resp->result = {{"error", error}};
 

@@ -52,7 +52,8 @@ This server provides tools for game development, rom hacking, reverse engineerin
 - **Disassembly**: View disassembled 6502 code for any address range
 - **Hardware Inspection**: 6502 CPU, Mikey (timers, audio, display), Suzy (sprites, math), UART (ComLynx)
 - **Frame Buffer Capture**: Capture VIDBAS (Suzy) and DISPADR (Mikey) frame buffers
-- **Symbol Support**: Add, remove, load, and list debug symbols
+- **Symbol Support**: Add, remove, load, list, and look up debug symbols
+- **Input State**: Inspect effective pressed buttons and pending tap releases
 - **Bookmarks**: Memory and disassembler bookmarks for navigation
 - **Call Stack**: View function call hierarchy
 - **Trace Logger**: CPU instruction trace with interleaved hardware events (Suzy math/sprites, Mikey timers/audio/UART, cart)
@@ -71,7 +72,7 @@ The default mode uses standard input/output for communication. The emulator is l
 
 ### HTTP Transport
 
-The HTTP transport mode runs the emulator with an embedded web server on `127.0.0.1:7777/mcp` by default. The emulator stays running independently while the AI client connects via HTTP. The listener rejects foreign `Host` and browser `Origin` values that do not match the configured endpoint. If `GEARLYNX_MCP_HTTP_TOKEN` is set, HTTP requests must include `Authorization: Bearer <token>`.
+The HTTP transport mode runs the emulator with an embedded web server on `127.0.0.1:7777/mcp` by default. The emulator stays running independently while the AI client connects via HTTP. Each request's `Host` and browser `Origin` must match the address on which its connection reached the server. Loopback mode can run without authentication; wildcard and other non-loopback bind addresses require `GEARLYNX_MCP_HTTP_TOKEN`, and the server refuses to start without it.
 
 ### Headless Mode
 
@@ -213,17 +214,19 @@ If you prefer to build from source or configure manually:
    ./gearlynx --mcp-http --mcp-http-port 3000
   ```
 
-  To bind to a custom address:
+  To bind to a custom address, set a bearer token first:
 
   ```bash
-  ./gearlynx --mcp-http --mcp-http-address 1.2.188.1.50 --mcp-http-port 3000
+  GEARLYNX_MCP_HTTP_TOKEN="change-this-token" ./gearlynx --mcp-http --mcp-http-address 0.0.0.0 --mcp-http-port 3000
   ```
+
+  Clients must connect using the server's actual interface address, such as `http://192.168.1.50:3000/mcp`, not `0.0.0.0` or a spoofed loopback address.
 
   You can also start the server using the "MCP" menu in the GUI.
 
-2. **Optional: require bearer-token authentication**:
+2. **Configure bearer-token authentication**:
 
-  Set `GEARLYNX_MCP_HTTP_TOKEN` before starting HTTP mode.
+  Set `GEARLYNX_MCP_HTTP_TOKEN` before starting HTTP mode. Authentication is optional for loopback binds and required for wildcard or other non-loopback binds.
 
   macOS and Linux:
 
@@ -286,7 +289,7 @@ If you prefer to build from source or configure manually:
 6. **Restart your AI client** and start debugging
 
 > **Note:** The MCP HTTP Server must be running standalone before connecting the AI client.
-> **Security:** If `GEARLYNX_MCP_HTTP_TOKEN` is unset, HTTP mode accepts unauthenticated requests from clients that pass the configured `Host` and `Origin` checks. The default bind address is local-only; use a non-loopback address only on trusted networks or with bearer-token authentication enabled.
+> **Security:** Without `GEARLYNX_MCP_HTTP_TOKEN`, HTTP mode starts only on a loopback address. Wildcard and other non-loopback binds are refused. `Host` and browser `Origin` values are matched to the connection's actual destination address to prevent DNS rebinding and address spoofing.
 
 ## Usage Examples
 
@@ -349,12 +352,15 @@ The server exposes tools organized in the following categories:
 - `list_memory_watches` - List all watches in memory area
 - `memory_search_capture` - Capture memory snapshot for search comparison
 - `memory_search` - Search memory with operators (<, >, ==, !=, <=, >=), compare types (previous, value, address), and data types (hex, signed, unsigned)
+- `memory_find_bytes` - Find byte sequences in memory
 
 ### Disassembly & Debugging
 - `get_disassembly` - Get disassembled 6502 code for specified address range (only executed code is available)
 - `add_symbol` - Add symbol (label) at specified address
 - `remove_symbol` - Remove symbol
 - `list_symbols` - List all defined symbols
+- `lookup_symbol_by_name` - Find all exact-name symbol matches
+- `lookup_symbol_at_address` - Find symbol at address
 - `load_symbols` - Load debug symbols from file (.sym ADDRESS LABEL, llvm-nm text, llvm-mos ELF, and other supported label formats)
 - `add_disassembler_bookmark` - Add bookmark in disassembler
 - `remove_disassembler_bookmark` - Remove disassembler bookmark
@@ -387,6 +393,7 @@ The server exposes tools organized in the following categories:
 ### Screen Capture
 - `get_screenshot` - Capture current screen frame as base64 PNG
 - `get_frame_buffer` - Capture debug frame buffer as base64 PNG (VIDBAS from Suzy or DISPADR from Mikey)
+- `get_sprite` - Render SCB sprite image or return sprite metadata
 
 ### Media & State Management
 - `get_media_info` - Get loaded ROM info (file path, type, size, CRC, rotation, EEPROM, BIOS status)
@@ -397,6 +404,8 @@ The server exposes tools organized in the following categories:
 - `select_save_state_slot` - Select active save state slot (1-5) for save/load operations
 - `save_state` - Save emulator state to currently selected slot
 - `load_state` - Load emulator state from currently selected slot
+- `save_state_file` - Save emulator state to an explicit file path
+- `load_state_file` - Load emulator state from an explicit file path
 - `set_fast_forward_speed` - Set fast forward speed multiplier (0: 1.5x, 1: 2x, 2: 2.5x, 3: 3x, 4: Unlimited)
 - `toggle_fast_forward` - Toggle fast forward mode on/off
 - `get_rewind_status` - Get rewind buffer status (snapshot count, capacity, buffered seconds, configuration)
@@ -405,6 +414,7 @@ The server exposes tools organized in the following categories:
 ### Controller Input
 - `controller_button` - Control a button on the Lynx controller. Use action 'press' to hold, 'release' to let go, or 'press_and_release' for a quick tap. Buttons: up, down, left, right, a, b, option1, option2, pause
 - `controller_macro` - Run an ordered input macro. Supported commands are `tap`, `press`, `release`, and `wait`; timing is explicit through `wait` frame counts
+- `get_input_state` - Get effective pressed buttons and pending tap releases
 
 ## Available MCP Resources
 

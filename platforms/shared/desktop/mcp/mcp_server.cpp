@@ -103,6 +103,7 @@ void McpServer::Run()
             json response;
             response["jsonrpc"] = "2.0";
             response["id"] = resp->requestId;
+            mcpResult["isError"] = resp->isToolError;
             response["result"] = mcpResult;
 
             SendResponse(response);
@@ -124,6 +125,26 @@ void McpServer::HandleLine(const std::string& line)
     }
 
     request = json::parse(line);
+
+    if (!request.is_object())
+    {
+        SendError(0, -32600, "Invalid Request: expected an object");
+        return;
+    }
+
+    if (request.contains("id") && !request["id"].is_number_integer() && !request["id"].is_number_unsigned())
+    {
+        SendError(0, -32600, "Invalid Request: id must be an integer");
+        return;
+    }
+
+    int64_t request_id = request.contains("id") ? request["id"].get<int64_t>() : 0;
+
+    if (request.contains("params") && !request["params"].is_object())
+    {
+        SendError(request_id, -32602, "Invalid params: expected an object");
+        return;
+    }
 
     // Validate JSON-RPC structure
     if (!request.contains("jsonrpc") || request["jsonrpc"] != "2.0")
@@ -171,8 +192,7 @@ void McpServer::HandleLine(const std::string& line)
     }
     else
     {
-        int64_t id = request.contains("id") ? request["id"].get<int64_t>() : 0;
-        SendError(id, -32601, "Method not found: " + method);
+        SendError(request_id, -32601, "Method not found: " + method);
     }
 }
 
@@ -190,6 +210,11 @@ void McpServer::HandleInitialize(const json& request)
     std::string protocolVersion = "2025-11-25";
     if (request.contains("params") && request["params"].contains("protocolVersion"))
     {
+        if (!request["params"]["protocolVersion"].is_string())
+        {
+            SendError(id, -32602, "Invalid params: protocolVersion must be a string");
+            return;
+        }
         protocolVersion = request["params"]["protocolVersion"];
     }
 
@@ -781,7 +806,7 @@ json McpServer::BuildToolList()
     tools.push_back({
         {"name", "load_media"},
         {"title", "Load ROM"},
-        {"description", "Load ROM media (.lnx .lyx .o .zip), auto-load .sym/.elf/.lbl/.noi symbols, reset emulator."},
+        {"description", "Load ROM media (.lnx .lyx .o .zip); reset emulator and auto-load .sym/.elf/.lbl/.noi symbols. Debugger state may be lost unless saved debugger settings are enabled."},
         {"inputSchema", {
             {"type", "object"},
             {"properties", {
@@ -870,6 +895,40 @@ json McpServer::BuildToolList()
         {"description", "Load emulator state from active save-state slot."},
         {"inputSchema", {
             {"type", "object"},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "save_state_file"},
+        {"title", "Save State File"},
+        {"description", "Save emulator state to an explicit file path."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"file_path", {
+                    {"type", "string"},
+                    {"description", "Absolute destination file path."}
+                }}
+            }},
+            {"required", json::array({"file_path"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "load_state_file"},
+        {"title", "Load State File"},
+        {"description", "Load emulator state from an explicit file path."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"file_path", {
+                    {"type", "string"},
+                    {"description", "Absolute save-state file path."}
+                }}
+            }},
+            {"required", json::array({"file_path"})},
             {"additionalProperties", false}
         }}
     });
@@ -972,6 +1031,16 @@ json McpServer::BuildToolList()
                 }}
             }},
             {"required", json::array({"commands"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "get_input_state"},
+        {"title", "Get Input State"},
+        {"description", "Get effective pressed buttons and pending tap releases."},
+        {"inputSchema", {
+            {"type", "object"},
             {"additionalProperties", false}
         }}
     });
@@ -1224,6 +1293,40 @@ json McpServer::BuildToolList()
     });
 
     tools.push_back({
+        {"name", "lookup_symbol_by_name"},
+        {"title", "Lookup Symbol by Name"},
+        {"description", "Find exact symbol name; return all matches."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"name", {
+                    {"type", "string"},
+                    {"description", "Exact symbol name."}
+                }}
+            }},
+            {"required", json::array({"name"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "lookup_symbol_at_address"},
+        {"title", "Lookup Symbol at Address"},
+        {"description", "Find symbol at address."},
+        {"inputSchema", {
+            {"type", "object"},
+            {"properties", {
+                {"address", {
+                    {"type", "string"},
+                    {"description", "Hex address, 0000-FFFF."}
+                }}
+            }},
+            {"required", json::array({"address"})},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
         {"name", "get_call_stack"},
         {"title", "Get Call Stack"},
         {"description", "List current call stack/subroutine hierarchy."},
@@ -1470,6 +1573,15 @@ json McpServer::BuildToolList()
         }}
     });
 
+    for (json::iterator it = tools.begin(); it != tools.end(); ++it)
+    {
+        if (it->contains("inputSchema") && (*it)["inputSchema"].is_object() &&
+            !(*it)["inputSchema"].contains("additionalProperties"))
+        {
+            (*it)["inputSchema"]["additionalProperties"] = false;
+        }
+    }
+
     return tools;
 }
 
@@ -1667,6 +1779,7 @@ void McpServer::SendToolResult(int64_t id, const json& result)
             }
         })}
     };
+    response["result"]["isError"] = result.contains("error");
 
     SendResponse(response);
 }
@@ -1681,47 +1794,73 @@ void McpServer::HandleToolsCall(const json& request)
 
     int64_t id = request["id"];
 
-    if (!request.contains("params") || !request["params"].contains("name"))
+    if (!request.contains("params") || !request["params"].contains("name") || !request["params"]["name"].is_string())
     {
         SendError(id, -32602, "Invalid params: missing tool name");
         return;
     }
 
     std::string toolName = request["params"]["name"];
+    if (request["params"].contains("arguments") && !request["params"]["arguments"].is_object())
+    {
+        SendError(id, -32602, "Invalid params: arguments must be an object");
+        return;
+    }
+
     json arguments = request["params"].contains("arguments") ? request["params"]["arguments"] : json::object();
 
-    if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName))
-        EnsureToolRegistry();
+    EnsureToolRegistry();
 
     if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "list_tool_categories"))
     {
+        if (!arguments.empty())
+        {
+            SendError(id, -32602, "Invalid params: list_tool_categories takes no arguments");
+            return;
+        }
         SendToolResult(id, HandleRouterListCategories());
         return;
     }
 
     if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "get_category_tools"))
     {
+        if (arguments.size() != 1 || !arguments.contains("category") || !arguments["category"].is_string())
+        {
+            SendError(id, -32602, "Invalid params: category must be a string");
+            return;
+        }
         SendToolResult(id, HandleRouterGetCategoryTools(arguments));
         return;
     }
 
     if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "get_tool_info"))
     {
+        if (arguments.size() != 1 || !arguments.contains("name") || !arguments["name"].is_string())
+        {
+            SendError(id, -32602, "Invalid params: name must be a string");
+            return;
+        }
         SendToolResult(id, HandleRouterGetToolInfo(arguments));
         return;
     }
 
     if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "search_tools"))
     {
+        if (arguments.size() != 1 || !arguments.contains("query") || !arguments["query"].is_string())
+        {
+            SendError(id, -32602, "Invalid params: query must be a string");
+            return;
+        }
         SendToolResult(id, HandleRouterSearchTools(arguments));
         return;
     }
 
     if (!g_mcp_router_disabled && m_toolRegistry.IsRouterTool(toolName, "execute_tool"))
     {
-        if (!arguments.contains("name") || !arguments["name"].is_string())
+        if (arguments.size() > 2 || !arguments.contains("name") || !arguments["name"].is_string() ||
+            (arguments.size() == 2 && !arguments.contains("arguments")))
         {
-            SendError(id, -32602, "Invalid params: missing routed tool name");
+            SendError(id, -32602, "Invalid params: execute_tool accepts only name and arguments");
             return;
         }
 
@@ -1729,14 +1868,27 @@ void McpServer::HandleToolsCall(const json& request)
 
         if (!m_toolRegistry.HasTool(toolName))
         {
-            SendToolResult(id, {{"error", "Unknown tool"}, {"name", toolName}});
+            SendError(id, -32602, "Invalid params: unknown routed tool '" + toolName + "'");
             return;
         }
 
-        if (arguments.contains("arguments") && arguments["arguments"].is_object())
+        if (arguments.contains("arguments") && !arguments["arguments"].is_object())
+        {
+            SendError(id, -32602, "Invalid params: routed arguments must be an object");
+            return;
+        }
+
+        if (arguments.contains("arguments"))
             arguments = arguments["arguments"];
         else
             arguments = json::object();
+    }
+
+    std::string validation_error;
+    if (!m_toolRegistry.ValidateArguments(toolName, arguments, validation_error))
+    {
+        SendError(id, -32602, "Invalid params: " + validation_error);
+        return;
     }
 
     // Enqueue command for main thread to execute
@@ -1965,13 +2117,20 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
     }
     else if (normalizedTool == "write_memory")
     {
-        int area = arguments["area"];
-        std::string offsetStr = arguments["offset"];
+        if (!arguments.contains("area") || !arguments["area"].is_number_integer())
+            return {{"error", "area is required"}};
+        if (!arguments.contains("offset") || !arguments["offset"].is_string())
+            return {{"error", "offset is required"}};
+        if (!arguments.contains("bytes") || !arguments["bytes"].is_string())
+            return {{"error", "bytes is required"}};
+
+        int area = arguments["area"].get<int>();
+        std::string offsetStr = arguments["offset"].get<std::string>();
         u32 offset;
         if (!parse_hex_with_prefix(offsetStr, &offset))
             return {{"error", "Invalid offset format"}};
 
-        std::string bytesStr = arguments["bytes"];
+        std::string bytesStr = arguments["bytes"].get<std::string>();
         std::vector<u8> data;
 
         // Parse hex bytes
@@ -2233,6 +2392,22 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
     {
         return m_debugAdapter.LoadState();
     }
+    else if (normalizedTool == "save_state_file")
+    {
+        if (!arguments.contains("file_path") || !arguments["file_path"].is_string())
+            return {{"error", "File path is required"}};
+
+        std::string file_path = arguments["file_path"];
+        return m_debugAdapter.SaveStateFile(file_path);
+    }
+    else if (normalizedTool == "load_state_file")
+    {
+        if (!arguments.contains("file_path") || !arguments["file_path"].is_string())
+            return {{"error", "File path is required"}};
+
+        std::string file_path = arguments["file_path"];
+        return m_debugAdapter.LoadStateFile(file_path);
+    }
     else if (normalizedTool == "set_fast_forward_speed")
     {
         int speed = arguments["speed"];
@@ -2248,6 +2423,10 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
         std::string button = arguments["button"];
         std::string action = arguments["action"];
         return m_debugAdapter.ControllerButton(button, action);
+    }
+    else if (normalizedTool == "get_input_state")
+    {
+        return m_debugAdapter.GetInputState();
     }
     else if (normalizedTool == "controller_macro")
     {
@@ -2364,6 +2543,18 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
     else if (normalizedTool == "list_symbols")
     {
         return m_debugAdapter.ListSymbols();
+    }
+    else if (normalizedTool == "lookup_symbol_by_name")
+    {
+        return m_debugAdapter.LookupSymbolByName(arguments["name"]);
+    }
+    else if (normalizedTool == "lookup_symbol_at_address")
+    {
+        std::string address_str = arguments["address"];
+        u16 address;
+        if (!parse_hex_with_prefix(address_str, &address))
+            return {{"error", "Invalid address format"}};
+        return m_debugAdapter.LookupSymbolAtAddress(address);
     }
     else if (normalizedTool == "get_call_stack")
     {
@@ -2600,9 +2791,9 @@ void McpServer::HandleResourcesRead(const json& request)
 
     int64_t id = request["id"];
 
-    if (!request.contains("params") || !request["params"].contains("uri"))
+    if (!request.contains("params") || !request["params"].contains("uri") || !request["params"]["uri"].is_string())
     {
-        SendError(id, -32602, "Invalid params: missing uri");
+        SendError(id, -32602, "Invalid params: uri must be a string");
         return;
     }
 
