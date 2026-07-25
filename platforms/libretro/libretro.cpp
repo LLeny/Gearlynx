@@ -25,6 +25,9 @@
 #include <math.h>
 #include "libretro.h"
 #include "gearlynx.h"
+#include "game_drive.h"
+#include "el_cheapo_sd.h"
+#include "sd_card_filesystem_libretro.h"
 #include "libretro_core_options.h"
 
 #ifdef _WIN32
@@ -63,6 +66,7 @@ static float current_fps = 60.0f;
 
 static bool allow_up_down = false;
 static bool categories_supported = false;
+static bool content_info_ext_supported = false;
 
 static bool libretro_supports_bitmasks = false;
 static int joypad_current[MAX_PADS][JOYPAD_BUTTONS];
@@ -200,7 +204,7 @@ void retro_set_environment(retro_environment_t cb)
         { NULL, false, false }
     };
 
-    environ_cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, (void*)content_overrides);
+    content_info_ext_supported = environ_cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, (void*)content_overrides);
     set_controller_info();
     libretro_set_core_options(environ_cb, &categories_supported);
 }
@@ -219,6 +223,15 @@ void retro_init(void)
         snprintf(retro_system_directory, sizeof(retro_system_directory), "%s", ".");
 
     log_cb(RETRO_LOG_INFO, "%s (%s) libretro\n", GLYNX_TITLE, GLYNX_VERSION);
+
+    struct retro_vfs_interface_info vfs_interface_info = {};
+    vfs_interface_info.required_interface_version = 3;
+    vfs_interface_info.iface = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_interface_info) && vfs_interface_info.iface)
+        sd_card_set_vfs_interface(vfs_interface_info.iface);
+    else
+        sd_card_set_vfs_interface(NULL);
 
     core = new GearlynxCore();
 
@@ -239,6 +252,7 @@ void retro_deinit(void)
 {
     SafeDeleteArray(frame_buffer);
     SafeDelete(core);
+    sd_card_set_vfs_interface(NULL);
 
     audio_sample_count = 0;
     current_screen_width = 0;
@@ -355,6 +369,21 @@ bool retro_load_game(const struct retro_game_info *info)
     load_bootroms();
 
     const char* game_path = info->path ? info->path : "";
+    char extended_game_path[4096] = {};
+
+    const struct retro_game_info_ext* game_info_ext = NULL;
+    if (content_info_ext_supported && environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &game_info_ext) && game_info_ext)
+    {
+        if (game_info_ext->full_path && game_info_ext->full_path[0])
+            game_path = game_info_ext->full_path;
+        else if (game_info_ext->dir && game_info_ext->dir[0] && game_info_ext->name && game_info_ext->name[0])
+        {
+            const char* extension = (game_info_ext->ext && game_info_ext->ext[0]) ? game_info_ext->ext : "lnx";
+            snprintf(extended_game_path, sizeof(extended_game_path), "%s/%s.%s", game_info_ext->dir, game_info_ext->name, extension);
+            game_path = extended_game_path;
+        }
+    }
+
     snprintf(retro_game_path, sizeof(retro_game_path), "%s", game_path);
     log_cb(RETRO_LOG_INFO, "retro_load_game: %s\n", retro_game_path);
 
@@ -362,6 +391,20 @@ bool retro_load_game(const struct retro_game_info *info)
     {
         log_cb(RETRO_LOG_ERROR, "Invalid or corrupted ROM.\n");
         return false;
+    }
+
+    GLYNX_Cartridge_Hardware cartridge_hardware = core->GetMedia()->GetCartridgeHardware();
+    bool sd_unavailable =
+        (cartridge_hardware == GLYNX_CARTRIDGE_HARDWARE_GAME_DRIVE && !core->GetMedia()->GetGameDriveInstance()->IsAvailable()) ||
+        (cartridge_hardware == GLYNX_CARTRIDGE_HARDWARE_EL_CHEAPO_SD && !core->GetMedia()->GetElCheapoSDInstance()->IsAvailable());
+
+    if (sd_unavailable)
+    {
+        struct retro_message msg = {};
+        msg.msg = "SD cartridge requires frontend VFS v3 and a content directory";
+        msg.frames = 360;
+        environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+        log_cb(RETRO_LOG_WARN, "%s.\n", msg.msg);
     }
 
     enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
@@ -397,7 +440,9 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 size_t retro_serialize_size(void)
 {
     size_t size = 0;
-    core->SaveState(NULL, size);
+    if (!core->GetMaxSaveStateSize(size))
+        return 0;
+
     return size;
 }
 
@@ -673,6 +718,8 @@ static void check_variables(void)
             rotation = GLYNX_ROTATION_RIGHT;
         else if (strcmp(var.value, "Disabled") == 0)
             rotation = GLYNX_ROTATION_DISABLED;
+        else if (strcmp(var.value, "180") == 0)
+            rotation = GLYNX_ROTATION_180;
 
         core->GetMedia()->ForceRotation(rotation);
     }
@@ -692,6 +739,62 @@ static void check_variables(void)
             console_type = GLYNX_CONSOLE_MODEL_II;
 
         core->GetMedia()->ForceConsoleType(console_type);
+    }
+
+    var.key = "gearlynx_eeprom_type";
+    var.value = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        GLYNX_EEPROM eeprom = GLYNX_EEPROM_NONE;
+        bool force = true;
+
+        if (strcmp(var.value, "Auto") == 0)
+            force = false;
+        else if (strcmp(var.value, "None") == 0)
+            eeprom = GLYNX_EEPROM_NONE;
+        else if (strcmp(var.value, "93C46_16bit") == 0)
+            eeprom = GLYNX_EEPROM_93C46;
+        else if (strcmp(var.value, "93C46_8bit") == 0)
+            eeprom = (GLYNX_EEPROM)(GLYNX_EEPROM_93C46 | GLYNX_EEPROM_8BIT);
+        else if (strcmp(var.value, "93C56_16bit") == 0)
+            eeprom = GLYNX_EEPROM_93C56;
+        else if (strcmp(var.value, "93C56_8bit") == 0)
+            eeprom = (GLYNX_EEPROM)(GLYNX_EEPROM_93C56 | GLYNX_EEPROM_8BIT);
+        else if (strcmp(var.value, "93C66_16bit") == 0)
+            eeprom = GLYNX_EEPROM_93C66;
+        else if (strcmp(var.value, "93C66_8bit") == 0)
+            eeprom = (GLYNX_EEPROM)(GLYNX_EEPROM_93C66 | GLYNX_EEPROM_8BIT);
+        else if (strcmp(var.value, "93C76_16bit") == 0)
+            eeprom = GLYNX_EEPROM_93C76;
+        else if (strcmp(var.value, "93C76_8bit") == 0)
+            eeprom = (GLYNX_EEPROM)(GLYNX_EEPROM_93C76 | GLYNX_EEPROM_8BIT);
+        else if (strcmp(var.value, "93C86_16bit") == 0)
+            eeprom = GLYNX_EEPROM_93C86;
+        else if (strcmp(var.value, "93C86_8bit") == 0)
+            eeprom = (GLYNX_EEPROM)(GLYNX_EEPROM_93C86 | GLYNX_EEPROM_8BIT);
+        else
+            force = false;
+
+        if (force)
+            core->GetMedia()->ForceEEPROM(eeprom);
+        else
+            core->GetMedia()->AutoDetectEEPROM();
+    }
+
+    var.key = "gearlynx_cartridge_hardware";
+    var.value = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "Standard") == 0)
+            core->GetMedia()->ForceCartridgeHardware(GLYNX_CARTRIDGE_HARDWARE_STANDARD);
+        else if (strcmp(var.value, "GameDrive") == 0)
+            core->GetMedia()->ForceCartridgeHardware(GLYNX_CARTRIDGE_HARDWARE_GAME_DRIVE);
+        else if (strcmp(var.value, "ElCheapoSD") == 0)
+            core->GetMedia()->ForceCartridgeHardware(GLYNX_CARTRIDGE_HARDWARE_EL_CHEAPO_SD);
+        else
+            core->GetMedia()->AutoDetectCartridgeHardware();
     }
 
     var.key = "gearlynx_fast_sprite_rendering";

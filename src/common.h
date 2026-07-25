@@ -21,6 +21,7 @@
 #define COMMON_H
 
 #include <stdlib.h>
+#include <cctype>
 #include <string>
 #include <string.h>
 #include <time.h>
@@ -210,6 +211,22 @@ inline char* strncat_fit(char* dest, const char* src, size_t dest_size)
     return strncat(dest, src, dest_size - len - 1);
 }
 
+inline bool strings_equal_ignore_case(const std::string& left, const std::string& right)
+{
+    if (left.size() != right.size())
+        return false;
+
+    for (size_t i = 0; i < left.size(); i++)
+    {
+        unsigned char left_char = (unsigned char)left[i];
+        unsigned char right_char = (unsigned char)right[i];
+        if (std::tolower(left_char) != std::tolower(right_char))
+            return false;
+    }
+
+    return true;
+}
+
 inline void append_path_component(std::string& path, const char* component)
 {
     if (path.length() > 0)
@@ -313,6 +330,21 @@ inline std::wstring utf8_to_wstring(const char* utf8_str)
     std::wstring wstr(size_needed, 0);
     MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, &wstr[0], size_needed);
     return wstr;
+}
+
+inline std::string wstring_to_utf8(const wchar_t* wide_str)
+{
+    if (!wide_str || wide_str[0] == L'\0')
+        return std::string();
+
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide_str, -1, NULL, 0, NULL, NULL);
+    if (size_needed <= 0)
+        return std::string();
+
+    std::string str(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wide_str, -1, &str[0], size_needed, NULL, NULL);
+    str.resize(size_needed - 1);
+    return str;
 }
 
 #define open_ifstream_utf8(stream, path, mode) \

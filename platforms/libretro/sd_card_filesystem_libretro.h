@@ -17,51 +17,11 @@
  *
  */
 
-#ifndef EEPROM_INLINE_H
-#define EEPROM_INLINE_H
+#ifndef SD_CARD_FILESYSTEM_LIBRETRO_H
+#define SD_CARD_FILESYSTEM_LIBRETRO_H
 
-#include "eeprom.h"
-#include "bit_ops.h"
+struct retro_vfs_interface;
 
-INLINE GLYNX_EEPROM EEPROM::GetType()
-{
-    return m_type;
-}
+void sd_card_set_vfs_interface(const retro_vfs_interface* vfs_interface);
 
-INLINE bool EEPROM::IsAvailable()
-{
-    return (m_type != GLYNX_EEPROM_NONE);
-}
-
-INLINE bool EEPROM::IsSelected()
-{
-    return IsAvailable() && m_last_cs;
-}
-
-INLINE void EEPROM::ProcessIO(u8 iodir, u8 iodat)
-{
-    m_iodir = iodir;
-    m_iodat = iodat;
-}
-
-INLINE bool EEPROM::OutputBit()
-{
-    return m_audin_output;
-}
-
-INLINE u8* EEPROM::GetData()
-{
-    return (u8*)m_rom_data;
-}
-
-INLINE bool EEPROM::IsDirty()
-{
-    return m_dirty;
-}
-
-INLINE void EEPROM::ClearDirty()
-{
-    m_dirty = false;
-}
-
-#endif /* EEPROM_INLINE_H */
+#endif /* SD_CARD_FILESYSTEM_LIBRETRO_H */

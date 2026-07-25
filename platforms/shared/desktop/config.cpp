@@ -317,6 +317,10 @@ void config_read(void)
     if (config_emulator.mcp_http_address.empty())
         config_emulator.mcp_http_address = "127.0.0.1";
     config_emulator.console_type = read_int("Emulator", "ConsoleType", 0);
+    config_emulator.eeprom = read_int("Emulator", "EEPROM", config_EEPROM_Auto);
+    config_emulator.eeprom = CLAMP(config_emulator.eeprom, config_EEPROM_Auto, config_EEPROM_Count - 1);
+    config_emulator.cartridge_hardware = read_int("Emulator", "CartridgeHardware", config_CartridgeHardware_Auto);
+    config_emulator.cartridge_hardware = CLAMP(config_emulator.cartridge_hardware, config_CartridgeHardware_Auto, config_CartridgeHardware_Count - 1);
 
     if (config_emulator.savefiles_path.empty())
     {
@@ -343,6 +347,7 @@ void config_read(void)
     config_video.scale_manual = read_int("Video", "ScaleManual", 1);
     config_video.ratio = read_int("Video", "AspectRatio", 0);
     config_video.rotation = read_int("Video", "Rotation", 0);
+    config_video.rotation = CLAMP(config_video.rotation, GLYNX_ROTATION_AUTO, GLYNX_ROTATION_180);
     config_video.fps = read_bool("Video", "FPS", false);
     config_video.shader_mode = read_int("Video", "ShaderMode", config_ShaderMode_PixelPerfect);
     config_video.shader_mode = CLAMP(config_video.shader_mode, config_ShaderMode_PixelPerfect, config_ShaderMode_External);
@@ -563,6 +568,8 @@ void config_write(void)
     write_int("Emulator", "MCPTCPPort", config_emulator.mcp_tcp_port);
     write_string("Emulator", "MCPHTTPAddress", config_emulator.mcp_http_address);
     write_int("Emulator", "ConsoleType", config_emulator.console_type);
+    write_int("Emulator", "EEPROM", config_emulator.eeprom);
+    write_int("Emulator", "CartridgeHardware", config_emulator.cartridge_hardware);
 
     for (int i = 0; i < config_max_recent_roms; i++)
     {

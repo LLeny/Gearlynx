@@ -35,6 +35,18 @@
 
 using json = nlohmann::json;
 
+#define MCP_MAX_PENDING_COMMANDS 64
+
+enum McpErrorCode
+{
+    MCP_ERROR_PARSE = -32700,
+    MCP_ERROR_INVALID_REQUEST = -32600,
+    MCP_ERROR_METHOD_NOT_FOUND = -32601,
+    MCP_ERROR_INVALID_PARAMS = -32602,
+    MCP_ERROR_INTERNAL = -32603,
+    MCP_ERROR_RESOURCE_NOT_FOUND = -32002
+};
+
 struct ResourceInfo
 {
     std::string uri;
@@ -47,14 +59,14 @@ struct ResourceInfo
 
 struct DebugCommand
 {
-    int64_t requestId;
+    json requestId;
     std::string toolName;
     json arguments;
 };
 
 struct DebugResponse
 {
-    int64_t requestId;
+    json requestId;
     bool isError = false;
     bool isToolError = false;
     int errorCode = 0;
@@ -65,10 +77,20 @@ struct DebugResponse
 class CommandQueue
 {
 public:
-    void Push(DebugCommand* cmd)
+    CommandQueue()
+    {
+        m_pending = 0;
+    }
+
+    bool Push(DebugCommand* cmd)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_pending >= MCP_MAX_PENDING_COMMANDS)
+            return false;
+
         m_queue.push(cmd);
+        m_pending++;
+        return true;
     }
 
     DebugCommand* Pop()
@@ -81,6 +103,13 @@ public:
         return cmd;
     }
 
+    void Complete()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_pending > 0)
+            m_pending--;
+    }
+
     void Clear()
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -89,11 +118,13 @@ public:
             SafeDelete(m_queue.front());
             m_queue.pop();
         }
+        m_pending = 0;
     }
 
 private:
     std::queue<DebugCommand*> m_queue;
     std::mutex m_mutex;
+    size_t m_pending;
 };
 
 class ResponseQueue
@@ -123,6 +154,11 @@ public:
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_running = false;
+        while (!m_queue.empty())
+        {
+            SafeDelete(m_queue.front());
+            m_queue.pop();
+        }
         m_cv.notify_all();
     }
 
@@ -172,29 +208,28 @@ public:
             return;
 
         LoadResources();
+        m_initialized = false;
         m_running.store(true);
+        m_readerThread = std::thread(&McpServer::ReaderLoop, this);
         m_thread = std::thread(&McpServer::Run, this);
     }
 
     void Stop()
     {
+        std::lock_guard<std::mutex> lock(m_stopMutex);
         m_running.store(false);
+        m_transport->close();
         m_responseQueue.Stop();
 
-        // Detach the thread instead of joining to avoid blocking on stdin read
-        // The thread will exit naturally when recv() returns or on next iteration
+        if (m_readerThread.joinable())
+            m_readerThread.join();
         if (m_thread.joinable())
-            m_thread.detach();
+            m_thread.join();
     }
 
     bool IsRunning() const
     {
         return m_running.load();
-    }
-
-    McpTransportInterface* GetTransport() const
-    {
-        return m_transport;
     }
 
     json ExecuteCommand(const std::string& toolName, const json& arguments);
@@ -217,20 +252,22 @@ private:
     json HandleRouterGetCategoryTools(const json& arguments);
     json HandleRouterGetToolInfo(const json& arguments);
     json HandleRouterSearchTools(const json& arguments);
-    void SendToolResult(int64_t id, const json& result);
+    void SendToolResult(const json& id, const json& result);
 
     void LoadResources();
     void LoadResourcesFromCategory(const std::string& category, const std::string& tocPath);
-    std::string ReadFileContents(const std::string& filePath);
+    bool ReadFileContents(const std::string& filePath, std::string& content);
 
     void SendResponse(const json& response);
-    void SendError(int64_t id, int code, const std::string& message, const json& data = json::object());
+    void SendError(const json& id, int code, const std::string& message, const json& data = json::object());
 
     McpTransportInterface* m_transport;
     DebugAdapter& m_debugAdapter;
     CommandQueue& m_commandQueue;
     ResponseQueue& m_responseQueue;
     std::thread m_thread;
+    std::thread m_readerThread;
+    std::mutex m_stopMutex;
     std::atomic<bool> m_running;
     bool m_initialized;
     McpToolRegistry m_toolRegistry;

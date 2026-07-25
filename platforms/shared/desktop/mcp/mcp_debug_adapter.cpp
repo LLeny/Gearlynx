@@ -576,6 +576,9 @@ json DebugAdapter::GetMediaInfo()
         case Media::MEDIA_HOMEBREW:
             info["media_type"] = "Homebrew";
             break;
+        case Media::MEDIA_EPYX_HEADERLESS:
+            info["media_type"] = "Epyx Headerless";
+            break;
         default:
             info["media_type"] = "Unknown";
             break;
@@ -596,6 +599,9 @@ json DebugAdapter::GetMediaInfo()
             break;
         case GLYNX_ROTATION_DISABLED:
             info["rotation"] = "Disabled";
+            break;
+        case GLYNX_ROTATION_180:
+            info["rotation"] = "180";
             break;
         default:
             info["rotation"] = "Unknown";
@@ -631,6 +637,19 @@ json DebugAdapter::GetMediaInfo()
     }
     info["eeprom_sd"] = (eeprom & GLYNX_EEPROM_SD) != 0;
     info["eeprom_8bit"] = (eeprom & GLYNX_EEPROM_8BIT) != 0;
+
+    switch (media->GetCartridgeHardware())
+    {
+        case GLYNX_CARTRIDGE_HARDWARE_GAME_DRIVE:
+            info["cartridge_hardware"] = "GameDrive";
+            break;
+        case GLYNX_CARTRIDGE_HARDWARE_EL_CHEAPO_SD:
+            info["cartridge_hardware"] = "ElCheapoSD";
+            break;
+        default:
+            info["cartridge_hardware"] = "Standard";
+            break;
+    }
 
     info["audin"] = media->GetAudin();
     info["bios_loaded"] = media->IsBiosLoaded();
@@ -1796,7 +1815,18 @@ json DebugAdapter::FinishLoadMedia(const std::string& file_path)
     result["rom_name"] = m_core->GetMedia()->GetFileName();
 
     Media::GLYNX_Media_Type type = m_core->GetMedia()->GetType();
-    result["media_type"] = (type == Media::MEDIA_HOMEBREW) ? "Homebrew" : "Lynx";
+    switch (type)
+    {
+        case Media::MEDIA_HOMEBREW:
+            result["media_type"] = "Homebrew";
+            break;
+        case Media::MEDIA_EPYX_HEADERLESS:
+            result["media_type"] = "Epyx Headerless";
+            break;
+        default:
+            result["media_type"] = "Lynx";
+            break;
+    }
 
     return result;
 }

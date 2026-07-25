@@ -22,12 +22,21 @@
 
 #include "common.h"
 
-#define GLYNX_DB_FLAG_NONE          0x00
-#define GLYNX_DB_FLAG_ROTATE_LEFT   0x01
-#define GLYNX_DB_FLAG_ROTATE_RIGHT  0x02
-#define GLYNX_DB_FLAG_AUDIN         0x04
-#define GLYNX_DB_FLAG_EEPROM_93C46  0x08
-#define GLYNX_DB_FLAG_NVRAM_8KB     0x10
+#define GLYNX_DB_FLAG_NONE          0x0000
+#define GLYNX_DB_FLAG_ROTATE_NONE   0x0001
+#define GLYNX_DB_FLAG_ROTATE_LEFT   0x0002
+#define GLYNX_DB_FLAG_ROTATE_RIGHT  0x0004
+#define GLYNX_DB_FLAG_ROTATE_180    0x0008
+#define GLYNX_DB_FLAG_AUDIN         0x0010
+#define GLYNX_DB_FLAG_EEPROM_93C46  0x0020
+#define GLYNX_DB_FLAG_EEPROM_93C56  0x0040
+#define GLYNX_DB_FLAG_EEPROM_93C66  0x0080
+#define GLYNX_DB_FLAG_EEPROM_93C76  0x0100
+#define GLYNX_DB_FLAG_EEPROM_93C86  0x0200
+#define GLYNX_DB_FLAG_EEPROM_8BIT   0x0400
+#define GLYNX_DB_FLAG_NVRAM_8KB     0x0800
+#define GLYNX_DB_FLAG_GAMEDRIVE     0x1000
+#define GLYNX_DB_FLAG_EL_CHEAPO_SD  0x2000
 
 #define GLYNX_DB_SIZE_C64K          0x100
 #define GLYNX_DB_SIZE_C128K         0x200
@@ -72,6 +81,7 @@ const GLYNX_Game_DB_Entry k_game_database[] =
     { 0x19C5A7A5, "Checkered Flag (USA, Europe)", GLYNX_CONSOLE_AUTO, 262144, 0, 0, 0 },
     { 0x6A5F53ED, "Chip's Challenge (USA, Europe)", GLYNX_CONSOLE_AUTO, 131072, 0, 0, 0 },
     { 0xAEC474C8, "Crystal Mines II (USA, Europe)", GLYNX_CONSOLE_AUTO, 131072, 0, 0, 0 },
+    { 0xF5319EB4, "CYA Test (Demo)", GLYNX_CONSOLE_AUTO, 38984, 0, 0, GLYNX_DB_FLAG_EL_CHEAPO_SD },
     { 0x99729395, "Daemonsgate (USA) (Proto)", GLYNX_CONSOLE_AUTO, 262144, 0, 0, 0 },
     { 0xB9AC1FE5, "Desert Strike - Return to the Gulf (USA, Europe)", GLYNX_CONSOLE_AUTO, 262144, 0, 0, 0 },
     { 0x50386CFA, "Dinolympics (USA, Europe)", GLYNX_CONSOLE_AUTO, 262144, 0, 0, 0 },

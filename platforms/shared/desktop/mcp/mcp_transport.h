@@ -22,27 +22,47 @@
 
 #define MCP_HTTP_ENDPOINT_PATH "/mcp"
 #define MCP_HTTP_AUTH_ENV "GEARLYNX_MCP_HTTP_TOKEN"
+#define MCP_HTTP_MAX_HEADER_SIZE (64 * 1024)
+#define MCP_MAX_MESSAGE_SIZE (4 * 1024 * 1024)
+#define MCP_HTTP_MAX_BODY_SIZE MCP_MAX_MESSAGE_SIZE
+#define MCP_HTTP_RECEIVE_TIMEOUT_MS 5000
+#define MCP_HTTP_SEND_TIMEOUT_MS 5000
+#define MCP_STDIO_POLL_TIMEOUT_MS 100
+#define MCP_PROTOCOL_VERSION "2025-11-25"
 
 #include <string>
 #include <iostream>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include "log.h"
 #include "../socket_types.h"
 
+#ifdef _WIN32
+    #include <windows.h>
+    #include <conio.h>
+#else
+    #include <sys/select.h>
+#endif
+
 typedef glynx_socket_t socket_t;
 typedef glynx_socket_len_t socket_len_t;
 #define INVALID_SOCKET_VALUE GLYNX_INVALID_SOCKET
 #define SOCKET_CLOSE(s) GLYNX_SOCKET_CLOSE(s)
+#define SOCKET_SHUTDOWN(s) GLYNX_SOCKET_SHUTDOWN(s)
 
 class McpTransportInterface
 {
 public:
     virtual ~McpTransportInterface() {}
     virtual bool send(const std::string& jsonLine) = 0;
+    virtual bool acknowledge_notification() = 0;
+    virtual bool reject_notification() = 0;
+    virtual bool validate_protocol_version(const std::string& method) = 0;
+    virtual void set_protocol_version(const std::string& version) = 0;
     virtual bool recv(std::string& jsonLine) = 0;
     virtual void close() = 0;
 };
@@ -52,44 +72,189 @@ class StdioTransport : public McpTransportInterface
 public:
     StdioTransport()
     {
-        m_closed = false;
+        m_closed.store(false);
+        m_input_eof = false;
     }
     ~StdioTransport() {}
 
     bool send(const std::string& jsonLine)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_closed)
+        if (m_closed.load())
             return false;
         std::cout << jsonLine << "\n";
         std::cout.flush();
         return true;
     }
 
+    bool acknowledge_notification()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return !m_closed.load();
+    }
+
+    bool reject_notification()
+    {
+        return acknowledge_notification();
+    }
+
+    bool validate_protocol_version(const std::string& method)
+    {
+        (void)method;
+        return true;
+    }
+
+    void set_protocol_version(const std::string& version)
+    {
+        (void)version;
+    }
+
     bool recv(std::string& jsonLine)
     {
-        if (m_closed)
-            return false;
-        return static_cast<bool>(std::getline(std::cin, jsonLine));
+        while (!m_closed.load())
+        {
+            size_t line_end = m_input_buffer.find('\n');
+            if (line_end != std::string::npos)
+            {
+                jsonLine = m_input_buffer.substr(0, line_end);
+                m_input_buffer.erase(0, line_end + 1);
+                if (!jsonLine.empty() && jsonLine[jsonLine.length() - 1] == '\r')
+                    jsonLine.erase(jsonLine.length() - 1);
+                return true;
+            }
+
+            if (m_input_eof)
+            {
+                if (m_input_buffer.empty())
+                    return false;
+
+                jsonLine = m_input_buffer;
+                m_input_buffer.clear();
+                return true;
+            }
+
+            char buffer[4096];
+            int received = read_stdin(buffer, sizeof(buffer));
+            if (received > 0)
+            {
+                const char* newline = (const char*)memchr(buffer, '\n', (size_t)received);
+                size_t bytes_before_newline = newline ? (size_t)(newline - buffer) : (size_t)received;
+                if (bytes_before_newline > MCP_MAX_MESSAGE_SIZE ||
+                    m_input_buffer.size() > MCP_MAX_MESSAGE_SIZE - bytes_before_newline)
+                {
+                    return false;
+                }
+                m_input_buffer.append(buffer, received);
+            }
+            else if (received == 0)
+                m_input_eof = true;
+            else if (received != -2)
+                return false;
+        }
+
+        return false;
     }
 
     void close()
     {
-        m_closed = true;
+        m_closed.store(true);
     }
 
 private:
+    int read_stdin(char* buffer, int length)
+    {
+#ifdef _WIN32
+        HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+        if (input == NULL || input == INVALID_HANDLE_VALUE)
+            return -1;
+
+        DWORD input_type = GetFileType(input);
+        if (input_type == FILE_TYPE_PIPE)
+        {
+            DWORD available = 0;
+            if (!PeekNamedPipe(input, NULL, 0, NULL, &available, NULL))
+            {
+                if (GetLastError() == ERROR_BROKEN_PIPE)
+                    return 0;
+                return -1;
+            }
+
+            if (available == 0)
+            {
+                Sleep(MCP_STDIO_POLL_TIMEOUT_MS);
+                return -2;
+            }
+
+            DWORD received = 0;
+            DWORD bytes_to_read = available < (DWORD)length ? available : (DWORD)length;
+            if (!ReadFile(input, buffer, bytes_to_read, &received, NULL))
+                return GetLastError() == ERROR_BROKEN_PIPE ? 0 : -1;
+            return (int)received;
+        }
+
+        if (input_type == FILE_TYPE_CHAR)
+        {
+            DWORD wait_result = WaitForSingleObject(input, MCP_STDIO_POLL_TIMEOUT_MS);
+            if (wait_result == WAIT_TIMEOUT)
+                return -2;
+            if (wait_result != WAIT_OBJECT_0)
+                return -1;
+
+            int received = 0;
+            while (received < length && _kbhit())
+            {
+                int character = _getch();
+                if (character == '\r')
+                    character = '\n';
+                buffer[received++] = (char)character;
+                if (character == '\n')
+                    break;
+            }
+            return received > 0 ? received : -2;
+        }
+
+        DWORD received = 0;
+        if (!ReadFile(input, buffer, (DWORD)length, &received, NULL))
+        {
+            if (GetLastError() == ERROR_BROKEN_PIPE)
+                return 0;
+            return -1;
+        }
+        return (int)received;
+#else
+        fd_set read_set;
+        FD_ZERO(&read_set);
+        FD_SET(STDIN_FILENO, &read_set);
+
+        struct timeval timeout;
+        timeout.tv_sec = MCP_STDIO_POLL_TIMEOUT_MS / 1000;
+        timeout.tv_usec = (MCP_STDIO_POLL_TIMEOUT_MS % 1000) * 1000;
+
+        int ready = select(STDIN_FILENO + 1, &read_set, NULL, NULL, &timeout);
+        if (ready == 0)
+            return -2;
+        if (ready < 0)
+            return errno == EINTR ? -2 : -1;
+
+        ssize_t received = ::read(STDIN_FILENO, buffer, (size_t)length);
+        if (received < 0)
+            return (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) ? -2 : -1;
+        return (int)received;
+#endif
+    }
+
     std::mutex m_mutex;
-    bool m_closed;
+    std::atomic<bool> m_closed;
+    std::string m_input_buffer;
+    bool m_input_eof;
 };
 
-// HttpTransport - Simple HTTP server for MCP over HTTP POST
 class HttpTransport : public McpTransportInterface
 {
 public:
     HttpTransport(const std::string& address, int port)
     {
-        m_closed = false;
+        m_closed.store(false);
         m_port = port;
         m_bind_address = address.empty() ? "127.0.0.1" : address;
         if (m_bind_address == "localhost")
@@ -99,6 +264,7 @@ public:
             m_auth_token = auth_token;
         m_server_socket = INVALID_SOCKET_VALUE;
         m_current_client = INVALID_SOCKET_VALUE;
+        m_pending_protocol_version_count = 0;
 #ifdef _WIN32
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -168,55 +334,62 @@ public:
 
     bool send(const std::string& jsonLine)
     {
+        return send_http_response(200, "OK", "application/json", jsonLine, true);
+    }
+
+    bool acknowledge_notification()
+    {
+        return send_http_response(202, "Accepted", NULL, "", true);
+    }
+
+    bool reject_notification()
+    {
+        return send_http_response(400, "Bad Request", NULL, "", true);
+    }
+
+    bool validate_protocol_version(const std::string& method)
+    {
+        if (method == "initialize")
+        {
+            if (m_pending_protocol_version_count <= 1)
+                return true;
+        }
+        else if (validate_protocol_version_header(false))
+        {
+            return true;
+        }
+
+        send_http_response(400, "Bad Request", NULL, "", true);
+        return false;
+    }
+
+    void set_protocol_version(const std::string& version)
+    {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_closed || m_current_client == INVALID_SOCKET_VALUE)
-        {
-            Debug("[MCP] HTTP send failed: %s (closed=%d, client=%d)", 
-                m_closed ? "server closed" : "no client connected",
-                m_closed, (int)m_current_client);
+        m_protocol_version = version;
+    }
+
+    bool extract_http_method(const std::string& request, std::string& method)
+    {
+        method.clear();
+        size_t line_end = request.find("\r\n");
+        size_t method_end = request.find(' ');
+        if (line_end == std::string::npos || method_end == std::string::npos || method_end == 0 || method_end >= line_end)
             return false;
-        }
 
-        // Build HTTP response (close connection after each response for simplicity)
-        std::string http_response = 
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: " + std::to_string(jsonLine.length()) + "\r\n" +
-            get_cors_origin_header() +
-            "Connection: close\r\n"
-            "\r\n" +
-            jsonLine;
-
-        int sent = ::send(m_current_client, http_response.c_str(), (int)http_response.length(), 0);
-
-        if (sent <= 0)
-        {
-            Error("[MCP] HTTP send() failed: %d", sent);
-            SOCKET_CLOSE(m_current_client);
-            m_current_client = INVALID_SOCKET_VALUE;
-            m_client_cv.notify_all();
+        size_t path_end = request.find(' ', method_end + 1);
+        if (path_end == std::string::npos || path_end <= method_end + 1 || path_end >= line_end)
             return false;
-        }
 
-        std::string log_output = jsonLine.length() > 500 
-            ? jsonLine.substr(0, 500) + "..." 
-            : jsonLine;
-        Debug("[MCP] HTTP response sent (%d bytes): %s", 
-            sent, log_output.c_str());
+        if (request.compare(path_end + 1, line_end - path_end - 1, "HTTP/1.1") != 0)
+            return false;
 
-        // Close connection after response (VS Code will reconnect for next request)
-        SOCKET_CLOSE(m_current_client);
-        m_current_client = INVALID_SOCKET_VALUE;
-        m_current_origin.clear();
-        m_client_cv.notify_all();
-
+        method = request.substr(0, method_end);
         return true;
     }
 
-    // Helper function to extract path from HTTP request line
     std::string extract_http_path(const std::string& request)
     {
-        // Request format: "METHOD /path HTTP/1.1\r\n..."
         size_t method_end = request.find(' ');
         if (method_end == std::string::npos)
             return "";
@@ -293,6 +466,73 @@ public:
         }
 
         return count;
+    }
+
+    bool parse_content_length(const std::string& value, size_t& content_length)
+    {
+        if (value.empty())
+            return false;
+
+        size_t parsed = 0;
+        for (size_t i = 0; i < value.length(); i++)
+        {
+            char character = value[i];
+            if (character < '0' || character > '9')
+                return false;
+
+            size_t digit = (size_t)(character - '0');
+            if (parsed > (((size_t)-1) - digit) / 10)
+                return false;
+            parsed = parsed * 10 + digit;
+        }
+
+        content_length = parsed;
+        return true;
+    }
+
+    bool configure_client_socket_timeouts(socket_t client)
+    {
+#ifdef _WIN32
+        DWORD receive_timeout = MCP_HTTP_RECEIVE_TIMEOUT_MS;
+        DWORD send_timeout = MCP_HTTP_SEND_TIMEOUT_MS;
+        return setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (const char*)&receive_timeout, sizeof(receive_timeout)) == 0 &&
+               setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, (const char*)&send_timeout, sizeof(send_timeout)) == 0;
+#else
+        struct timeval receive_timeout;
+        receive_timeout.tv_sec = MCP_HTTP_RECEIVE_TIMEOUT_MS / 1000;
+        receive_timeout.tv_usec = (MCP_HTTP_RECEIVE_TIMEOUT_MS % 1000) * 1000;
+
+        struct timeval send_timeout;
+        send_timeout.tv_sec = MCP_HTTP_SEND_TIMEOUT_MS / 1000;
+        send_timeout.tv_usec = (MCP_HTTP_SEND_TIMEOUT_MS % 1000) * 1000;
+
+        return setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout)) == 0 &&
+               setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout)) == 0;
+#endif
+    }
+
+    bool is_receive_timeout_error()
+    {
+#ifdef _WIN32
+        int error = WSAGetLastError();
+        return error == WSAETIMEDOUT || error == WSAEWOULDBLOCK;
+#else
+        return errno == EAGAIN || errno == EWOULDBLOCK;
+#endif
+    }
+
+    bool validate_protocol_version_header(bool allow_uninitialized)
+    {
+        std::string protocol_version;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            protocol_version = m_protocol_version;
+        }
+
+        if (protocol_version.empty())
+            return allow_uninitialized;
+
+        return m_pending_protocol_version_count == 1 && m_pending_protocol_version == protocol_version;
     }
 
     std::string sanitize_http_headers_for_debug(const std::string& headers)
@@ -390,19 +630,40 @@ public:
     void close_current_client()
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        close_current_client_locked();
+    }
+
+    void close_current_client_locked()
+    {
         if (m_current_client != INVALID_SOCKET_VALUE)
+        {
+            SOCKET_SHUTDOWN(m_current_client);
             SOCKET_CLOSE(m_current_client);
+        }
         m_current_client = INVALID_SOCKET_VALUE;
         m_current_origin.clear();
         m_client_cv.notify_all();
     }
 
-    void send_http_response(socket_t client, int code, const char* status, const char* content_type, const std::string& body, bool include_cors, const char* extra_headers = NULL)
+    bool send_http_response(int code, const char* status, const char* content_type, const std::string& body, bool include_cors, const char* extra_headers = NULL)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_closed.load() || m_current_client == INVALID_SOCKET_VALUE)
+        {
+            Debug("[MCP] HTTP send failed: %s (closed=%d, client=%d)",
+            m_closed.load() ? "server closed" : "no client connected",
+            m_closed.load(), (int)m_current_client);
+            return false;
+        }
+
         std::string response =
-            "HTTP/1.1 " + std::to_string(code) + " " + status + "\r\n"
-            "Content-Type: " + content_type + "\r\n"
-            "Content-Length: " + std::to_string(body.length()) + "\r\n";
+            "HTTP/1.1 " + std::to_string(code) + " " + status + "\r\n";
+
+        if (content_type)
+        {
+            response += "Content-Type: " + std::string(content_type) + "\r\n";
+            response += "Content-Length: " + std::to_string(body.length()) + "\r\n";
+        }
 
         if (include_cors)
             response += get_cors_origin_header();
@@ -415,8 +676,32 @@ public:
             "\r\n" +
             body;
 
-        ::send(client, response.c_str(), (int)response.length(), 0);
-        close_current_client();
+        size_t total_sent = 0;
+        while (total_sent < response.length())
+        {
+            int sent = ::send(m_current_client, response.c_str() + total_sent,
+                              (int)(response.length() - total_sent), 0);
+            if (sent <= 0)
+            {
+                Error("[MCP] HTTP send() failed: %d", sent);
+                close_current_client_locked();
+                return false;
+            }
+            total_sent += sent;
+
+            if (m_closed.load())
+            {
+                close_current_client_locked();
+                return false;
+            }
+        }
+
+        std::string log_output = body.length() > 500 ? body.substr(0, 500) + "..." : body;
+        Debug("[MCP] HTTP response sent (%d bytes): %d %s%s%s",
+              (int)total_sent, code, status, body.empty() ? "" : ": ", log_output.c_str());
+
+        close_current_client_locked();
+        return true;
     }
 
     bool validate_and_reject_bearer_auth(const std::string& request, socket_t client)
@@ -428,7 +713,7 @@ public:
         if (extract_http_header(request, "Authorization", authorization) != 1)
         {
             Debug("[MCP] Rejecting request with missing or duplicate Authorization header");
-            send_http_response(client, 401, "Unauthorized", "text/plain", "401 Unauthorized", true, "WWW-Authenticate: Bearer\r\n");
+            send_http_response(401, "Unauthorized", "text/plain", "401 Unauthorized", true, "WWW-Authenticate: Bearer\r\n");
             return false;
         }
 
@@ -438,7 +723,7 @@ public:
             return true;
 
         Debug("[MCP] Rejecting request with missing or invalid bearer token");
-        send_http_response(client, 401, "Unauthorized", "text/plain", "401 Unauthorized", true, "WWW-Authenticate: Bearer\r\n");
+        send_http_response(401, "Unauthorized", "text/plain", "401 Unauthorized", true, "WWW-Authenticate: Bearer\r\n");
         return false;
     }
 
@@ -448,7 +733,7 @@ public:
         if (!get_socket_local_address(client, local_address))
         {
             Debug("[MCP] Rejecting request because the local socket address is unavailable");
-            send_http_response(client, 403, "Forbidden", "text/plain", "403 Forbidden", false);
+            send_http_response(403, "Forbidden", "text/plain", "403 Forbidden", false);
             return false;
         }
 
@@ -456,7 +741,7 @@ public:
         if (extract_http_header(request, "Host", host) != 1 || !is_allowed_host(host, local_address))
         {
             Debug("[MCP] Rejecting request with missing, duplicate, or foreign Host: %s", host.c_str());
-            send_http_response(client, 403, "Forbidden", "text/plain", "403 Forbidden", false);
+            send_http_response(403, "Forbidden", "text/plain", "403 Forbidden", false);
             return false;
         }
 
@@ -472,7 +757,7 @@ public:
         if (origin_count > 1 || (origin_count == 1 && m_current_origin.empty()))
         {
             Debug("[MCP] Rejecting request with duplicate or foreign Origin: %s", origin.c_str());
-            send_http_response(client, 403, "Forbidden", "text/plain", "403 Forbidden", false);
+            send_http_response(403, "Forbidden", "text/plain", "403 Forbidden", false);
             return false;
         }
 
@@ -494,61 +779,83 @@ public:
         }
 
         Debug("[MCP] Rejecting request to invalid path: %s", path.c_str());
-        send_http_response(client, 404, "Not Found", "text/plain", "404 Not Found", true);
+        send_http_response(404, "Not Found", "text/plain", "404 Not Found", true);
         return false;
     }
 
     bool recv(std::string& jsonLine)
     {
-        while (!m_closed && m_server_socket != INVALID_SOCKET_VALUE)
+        while (!m_closed.load())
         {
-            // Wait until any previous client has been responded to and closed
+            socket_t server_socket = INVALID_SOCKET_VALUE;
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
                 m_client_cv.wait(lock, [this]
                 {
-                    return m_closed || m_current_client == INVALID_SOCKET_VALUE;
+                    return m_closed.load() || m_current_client == INVALID_SOCKET_VALUE;
                 });
 
-                if (m_closed)
+                if (m_closed.load())
                 {
                     Debug("[MCP] Server closed, stopping recv loop");
                     return false;
                 }
+
+                server_socket = m_server_socket;
+                if (server_socket == INVALID_SOCKET_VALUE)
+                    return false;
             }
 
-            // Accept new connection (we close after each response)
             struct sockaddr_in client_addr;
             socket_len_t client_len = sizeof(client_addr);
-            socket_t client = accept(m_server_socket, (struct sockaddr*)&client_addr, &client_len);
+            socket_t client = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
 
             if (client == INVALID_SOCKET_VALUE)
             {
-                if (m_closed)
+                if (m_closed.load())
                 {
                     Debug("[MCP] Server closed, stopping recv loop");
                     return false;
                 }
                 Debug("[MCP] accept() failed, retrying");
-                continue; // Try again
+                continue;
             }
 
             Log("[MCP] HTTP client connected");
 
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
+                if (m_closed.load())
+                {
+                    SOCKET_SHUTDOWN(client);
+                    SOCKET_CLOSE(client);
+                    return false;
+                }
                 m_current_client = client;
                 m_current_origin.clear();
             }
+            m_pending_protocol_version.clear();
+            m_pending_protocol_version_count = 0;
 
-            // Read HTTP request (can be larger than one recv call)
+            if (!configure_client_socket_timeouts(client))
+            {
+                Error("[MCP] Failed to configure HTTP client socket timeouts");
+                close_current_client();
+                continue;
+            }
+
             std::string request;
             char buffer[4096];
             int header_end = -1;
-            int content_length = -1;
+            size_t content_length = 0;
+            std::string http_method;
             bool read_error = false;
-            bool is_options = false;
             bool connection_closed = false;
+            bool request_timed_out = false;
+            bool header_too_large = false;
+            bool body_too_large = false;
+            bool invalid_framing = false;
+            bool request_line_valid = false;
 
             while (true)
             {
@@ -557,107 +864,141 @@ public:
                 {
                     read_error = true;
                     connection_closed = (received == 0);
+                    request_timed_out = (received < 0) && is_receive_timeout_error();
                     Debug("[MCP] HTTP recv %s (received=%d)", 
-                            connection_closed ? "connection closed by client" : "error",
+                            connection_closed ? "connection closed by client" : (request_timed_out ? "timeout" : "error"),
                             received);
                     break;
                 }
 
                 request.append(buffer, received);
 
-                // Look for end of headers
                 if (header_end == -1)
                 {
                     size_t pos = request.find("\r\n\r\n");
                     if (pos != std::string::npos)
                     {
                         header_end = (int)(pos + 4);
+                        request_line_valid = extract_http_method(request, http_method);
 
-                        // Log the full request headers for debugging
+                        if ((size_t)header_end > MCP_HTTP_MAX_HEADER_SIZE)
+                        {
+                            header_too_large = true;
+                            break;
+                        }
+
                         Debug("[MCP] HTTP headers:\n%s", sanitize_http_headers_for_debug(request.substr(0, header_end)).c_str());
 
-                        // Check if this is an OPTIONS request (CORS preflight)
-                        if (request.find("OPTIONS ") == 0)
+                        m_pending_protocol_version_count = extract_http_header(request, "MCP-Protocol-Version", m_pending_protocol_version);
+
+                        if (!request_line_valid)
                         {
-                            is_options = true;
+                            invalid_framing = true;
+                            break;
+                        }
+
+                        std::string transfer_encoding;
+                        if (extract_http_header(request, "Transfer-Encoding", transfer_encoding) != 0)
+                        {
+                            invalid_framing = true;
+                            break;
+                        }
+
+                        if (http_method != "POST")
+                        {
                             content_length = 0;
                             break;
                         }
 
-                        // Parse Content-Length (case-insensitive)
-                        size_t cl_pos = request.find("Content-Length:");
-                        if (cl_pos == std::string::npos)
-                            cl_pos = request.find("content-length:");
+                        std::string content_length_value;
+                        if (extract_http_header(request, "Content-Length", content_length_value) != 1 ||
+                            !parse_content_length(content_length_value, content_length) || content_length == 0)
+                        {
+                            invalid_framing = true;
+                            break;
+                        }
 
-                        if (cl_pos != std::string::npos)
+                        if (content_length > MCP_HTTP_MAX_BODY_SIZE)
                         {
-                            const char* cl_start = request.c_str() + cl_pos;
-                            while (*cl_start && *cl_start != ':') cl_start++;
-                            if (*cl_start == ':') cl_start++;
-                            while (*cl_start && (*cl_start == ' ' || *cl_start == '\t')) cl_start++;
-                            content_length = atoi(cl_start);
+                            body_too_large = true;
+                            break;
                         }
-                        else
-                        {
-                            // No Content-Length header, assume no body
-                            content_length = 0;
-                        }
+                    }
+                    else if (request.length() > MCP_HTTP_MAX_HEADER_SIZE)
+                    {
+                        header_too_large = true;
+                        break;
                     }
                 }
 
-                // Check if we have the complete body
-                if (header_end > 0 && content_length >= 0)
+                if (header_end > 0 && http_method == "POST" && !invalid_framing && !body_too_large)
                 {
-                    int body_length = (int)request.length() - header_end;
+                    size_t body_length = request.length() - (size_t)header_end;
                     if (body_length >= content_length)
                         break;
                 }
             }
 
-            // Handle connection closed by client
             if (connection_closed)
             {
                 Log("[MCP] Client disconnected, cleaning up");
-                std::lock_guard<std::mutex> lock(m_mutex);
-                SOCKET_CLOSE(m_current_client);
-                m_current_client = INVALID_SOCKET_VALUE;
-                m_current_origin.clear();
-                m_client_cv.notify_all();
-                continue; // Wait for next connection
+                close_current_client();
+                continue;
             }
 
-            // Handle OPTIONS request (CORS preflight)
-            if (is_options)
+            if (request_timed_out || (read_error && !connection_closed))
             {
-                if (!validate_and_reject_invalid_request(request, client, false))
-                    continue;
+                close_current_client();
+                continue;
+            }
 
+            if (header_end <= 0)
+            {
+                close_current_client();
+                continue;
+            }
+
+            if (!request_line_valid)
+            {
+                if (validate_and_reject_http_access(request, client))
+                    send_http_response(400, "Bad Request", "text/plain", "400 Bad Request", true);
+                continue;
+            }
+
+            bool require_auth = (http_method != "OPTIONS");
+            if (!validate_and_reject_invalid_request(request, client, require_auth))
+                continue;
+
+            if (header_too_large)
+            {
+                send_http_response(431, "Request Header Fields Too Large", "text/plain", "431 Request Header Fields Too Large", true);
+                continue;
+            }
+
+            if (body_too_large)
+            {
+                send_http_response(413, "Content Too Large", "text/plain", "413 Content Too Large", true);
+                continue;
+            }
+
+            if (invalid_framing)
+            {
+                send_http_response(400, "Bad Request", "text/plain", "400 Bad Request", true);
+                continue;
+            }
+
+            if (http_method == "OPTIONS")
+            {
                 Debug("[MCP] HTTP OPTIONS request (CORS preflight)");
 
-                std::string options_response = 
-                    "HTTP/1.1 204 No Content\r\n" +
-                    get_cors_origin_header() +
-                    "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
-                    "Access-Control-Allow-Headers: Authorization, Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version\r\n"
-                    "Connection: close\r\n"
-                    "\r\n";
-
-                ::send(client, options_response.c_str(), (int)options_response.length(), 0);
-
-                std::lock_guard<std::mutex> lock(m_mutex);
-                SOCKET_CLOSE(m_current_client);
-                m_current_client = INVALID_SOCKET_VALUE;
-                m_current_origin.clear();
-                m_client_cv.notify_all();
-                continue; // Wait for next connection
+                send_http_response(204, "No Content", NULL, "", true,
+                                   "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+                                   "Access-Control-Allow-Headers: Authorization, Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version\r\n");
+                continue;
             }
 
-            // Handle POST with body (normal MCP request)
-            if (!read_error && header_end > 0 && content_length > 0)
+            if (http_method == "POST")
             {
-                if (!validate_and_reject_invalid_request(request, client, true))
-                    continue;
-
                 jsonLine = request.substr(header_end, content_length);
                 Debug("[MCP] HTTP POST request received (%d bytes): %s", 
                     (int)jsonLine.length(), 
@@ -665,102 +1006,67 @@ public:
                 return true;
             }
 
-            // Handle GET request - client wants to open SSE stream for async notifications
-            // We don't support SSE, so respond with 405 Method Not Allowed
-            if (!read_error && header_end > 0 && request.find("GET ") == 0)
+            if (http_method == "GET" && !validate_protocol_version_header(true))
             {
-                if (!validate_and_reject_invalid_request(request, client, true))
-                    continue;
-                
-                Debug("[MCP] HTTP GET request (SSE not supported, responding 405)");
-
-                std::string method_not_allowed = 
-                    "HTTP/1.1 405 Method Not Allowed\r\n"
-                    "Content-Type: application/json\r\n"
-                    "Content-Length: 56\r\n" +
-                    get_cors_origin_header() +
-                    "Connection: close\r\n"
-                    "\r\n"
-                    "{\"error\":\"SSE streaming not supported by this server\"}";
-
-                ::send(client, method_not_allowed.c_str(), (int)method_not_allowed.length(), 0);
-
-                std::lock_guard<std::mutex> lock(m_mutex);
-                SOCKET_CLOSE(m_current_client);
-                m_current_client = INVALID_SOCKET_VALUE;
-                m_current_origin.clear();
-                m_client_cv.notify_all();
-                continue; // Wait for next request
+                send_http_response(400, "Bad Request", NULL, "", true);
+                continue;
             }
 
-            // Handle POST without body - VS Code MCP client doesn't do health checks this way
-            // According to spec, all MCP messages should have a JSON-RPC body
-            if (!read_error && header_end > 0 && content_length == 0 && request.find("POST ") == 0)
+            Debug("[MCP] HTTP %s request not supported, responding 405", http_method.c_str());
+
+            if (http_method == "HEAD")
             {
-                if (!validate_and_reject_invalid_request(request, client, true))
-                    continue;
-
-                Debug("[MCP] HTTP POST without body (non-standard, closing connection)");
-
-                std::lock_guard<std::mutex> lock(m_mutex);
-                SOCKET_CLOSE(m_current_client);
-                m_current_client = INVALID_SOCKET_VALUE;
-                m_current_origin.clear();
-                m_client_cv.notify_all();
-                continue; // Wait for next request
+                send_http_response(405, "Method Not Allowed", NULL, "", true,
+                                   "Allow: POST, OPTIONS\r\n");
+            }
+            else if (http_method == "GET")
+            {
+                const std::string body = "{\"error\":\"SSE streaming not supported by this server\"}";
+                send_http_response(405, "Method Not Allowed", "application/json", body, true,
+                                   "Allow: POST, OPTIONS\r\n");
+            }
+            else
+            {
+                const std::string body = "{\"error\":\"HTTP method not supported by this server\"}";
+                send_http_response(405, "Method Not Allowed", "application/json", body, true,
+                                   "Allow: POST, OPTIONS\r\n");
             }
 
-            // Unknown/malformed request - log and close connection
-            if (read_error && !connection_closed)
-            {
-                Debug("[MCP] HTTP read error (header_end=%d, content_length=%d)", 
-                        header_end, content_length);
-
-                size_t first_line_end = request.find("\r\n");
-                if (first_line_end != std::string::npos)
-                {
-                    Debug("[MCP] Request line: %s", request.substr(0, first_line_end).c_str());
-                }
-
-                std::lock_guard<std::mutex> lock(m_mutex);
-                SOCKET_CLOSE(m_current_client);
-                m_current_client = INVALID_SOCKET_VALUE;
-                m_current_origin.clear();
-                m_client_cv.notify_all();
-                continue; // Wait for next connection
-            }
+            continue;
         }
 
-        return false; // Server closed
+        return false;
     }
 
     void close()
     {
-        m_closed = true;
-        m_client_cv.notify_all();
+        if (m_closed.exchange(true))
+            return;
 
-        if (m_current_client != INVALID_SOCKET_VALUE)
-        {
-            SOCKET_CLOSE(m_current_client);
-            m_current_client = INVALID_SOCKET_VALUE;
-        }
-        m_current_origin.clear();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        close_current_client_locked();
 
         if (m_server_socket != INVALID_SOCKET_VALUE)
         {
+            SOCKET_SHUTDOWN(m_server_socket);
             SOCKET_CLOSE(m_server_socket);
             m_server_socket = INVALID_SOCKET_VALUE;
         }
+
+        m_client_cv.notify_all();
     }
 
 private:
     std::mutex m_mutex;
     std::condition_variable m_client_cv;
-    bool m_closed;
+    std::atomic<bool> m_closed;
     int m_port;
     std::string m_bind_address;
     std::string m_auth_token;
     std::string m_current_origin;
+    std::string m_protocol_version;
+    std::string m_pending_protocol_version;
+    int m_pending_protocol_version_count;
     socket_t m_server_socket;
     socket_t m_current_client;
 };

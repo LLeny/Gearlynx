@@ -453,6 +453,15 @@ bool GearlynxCore::SaveState(u8* buffer, size_t& size, bool screenshot)
     }
 }
 
+bool GearlynxCore::GetMaxSaveStateSize(size_t& size)
+{
+    if (!SaveState(NULL, size))
+        return false;
+
+    size += m_media->GetSaveStateSizeReserve();
+    return true;
+}
+
 bool GearlynxCore::SaveState(std::ostream& stream, size_t& size, bool screenshot)
 {
     using namespace std;
@@ -754,7 +763,7 @@ bool GearlynxCore::GetSaveStateScreenshot(int index, const char* path, GLYNX_Sav
 {
     using namespace std;
 
-    if (!IsValidPointer(screenshot->data) || (screenshot->size == 0))
+    if (!IsValidPointer(screenshot) || !IsValidPointer(screenshot->data) || (screenshot->size == 0))
     {
         Error("Invalid save state screenshot buffer");
         return false;
