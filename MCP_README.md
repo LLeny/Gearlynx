@@ -18,29 +18,29 @@ This server provides tools for game development, rom hacking, reverse engineerin
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-windows-x64.mcpb">Gearlynx-1.2.21-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-windows-x64.mcpb">Gearlynx-1.2.22-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-windows-arm64.mcpb">Gearlynx-1.2.21-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-windows-arm64.mcpb">Gearlynx-1.2.22-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>macOS</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-macos-x64.mcpb">Gearlynx-1.2.21-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-macos-x64.mcpb">Gearlynx-1.2.22-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-macos-arm64.mcpb">Gearlynx-1.2.21-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-macos-arm64.mcpb">Gearlynx-1.2.22-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>Linux</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-linux-x64.mcpb">Gearlynx-1.2.21-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-linux-x64.mcpb">Gearlynx-1.2.22-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.21/Gearlynx-1.2.21-mcpb-linux-arm64.mcpb">Gearlynx-1.2.21-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-linux-arm64.mcpb">Gearlynx-1.2.22-mcpb-linux-arm64.mcpb</a></td>
     </tr>
   </tbody>
 </table>
@@ -77,6 +77,18 @@ The HTTP transport mode runs the emulator with an embedded web server on `127.0.
 ### Headless Mode
 
 Add `--headless` to run without a GUI window. This is useful for servers, CLI agents, or any machine without a display. All MCP tools work identically in headless mode. Requires `--mcp-stdio` or `--mcp-http`.
+
+### Concurrent Clients
+
+The HTTP server accepts repeated valid MCP initialization requests. All connected clients control the same Gearlynx instance. Individual HTTP requests are serialized, but multi-request debugging workflows are not atomic. Concurrent agents can interfere with each other through pauses, resets, breakpoints, memory writes, media loads, and save states.
+
+For independent agent tasks, run one Gearlynx instance per agent on a unique HTTP port. Use `--headless` and give each instance its own portable application directory so its configuration and runtime files are isolated:
+
+```bash
+./gearlynx --mcp-http --headless --portable --mcp-http-port 7778
+```
+
+The `--portable` option stores configuration and user data beside the application. Alternatively, create an empty `portable.ini` beside the executable in each application directory. On macOS, place it next to each `.app` bundle.
 
 ## MCP Tool Router
 

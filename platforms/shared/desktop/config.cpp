@@ -30,7 +30,7 @@
 #include "shader_preset.h"
 #include "utils.h"
 
-static char* get_portable_path(void);
+static char* get_portable_path(bool force_portable);
 static bool check_portable(const char* base_path);
 static int read_int(const char* group, const char* key, int default_value);
 static void write_int(const char* group, const char* key, int integer);
@@ -114,10 +114,10 @@ static void set_defaults(void)
         config_audio.volume[i] = 1.0f;
 }
 
-void config_init(void)
+void config_init(bool force_portable)
 {
     const char* root_path = NULL;
-    char* portable_path = get_portable_path();
+    char* portable_path = get_portable_path(force_portable);
 
     if (portable_path)
         root_path = portable_path;
@@ -269,8 +269,7 @@ void config_read(void)
     config_debug.pause_on_brk_value = CLAMP(config_debug.pause_on_brk_value, 0, 0xFF);
     config_debug.pause_on_brk_trigger_irq = read_bool("Debug", "PauseOnBRKTriggerIRQ", false);
     config_debug.font_size = read_int("Debug", "FontSize", 0);
-    if (config_debug.font_size < 0 || config_debug.font_size > 3)
-        config_debug.font_size = 0;
+    config_debug.font_size = CLAMP(config_debug.font_size, 0, 3);
     config_debug.scale = read_int("Debug", "Scale", 2);
     config_debug.multi_viewport = read_bool("Debug", "MultiViewport", false);
     config_debug.single_instance = read_bool("Debug", "SingleInstance", false);
@@ -297,7 +296,7 @@ void config_read(void)
     config_emulator.runahead = CLAMP(config_emulator.runahead, 0, 3);
     config_emulator.save_slot = read_int("Emulator", "SaveSlot", 0);
     config_emulator.save_slot = CLAMP(config_emulator.save_slot, 0, 4);
-    config_emulator.fast_sprite_rendering = read_bool("Emulator", "FastSpriteRendering", false);
+    config_emulator.fast_sprite_rendering = read_bool("Emulator", "LegacySpriteRendering", false);
     config_emulator.start_paused = read_bool("Emulator", "StartPaused", false);
     config_emulator.pause_when_inactive = read_bool("Emulator", "PauseWhenInactive", true);
     config_emulator.bios_path = read_string("Emulator", "BiosPath");
@@ -550,7 +549,7 @@ void config_write(void)
     write_int("Emulator", "FFWD", config_emulator.ffwd_speed);
     write_int("Emulator", "RunAhead", config_emulator.runahead);
     write_int("Emulator", "SaveSlot", config_emulator.save_slot);
-    write_bool("Emulator", "FastSpriteRendering", config_emulator.fast_sprite_rendering);
+    write_bool("Emulator", "LegacySpriteRendering", config_emulator.fast_sprite_rendering);
     write_bool("Emulator", "StartPaused", config_emulator.start_paused);
     write_bool("Emulator", "PauseWhenInactive", config_emulator.pause_when_inactive);
     write_string("Emulator", "BiosPath", config_emulator.bios_path);
@@ -681,7 +680,7 @@ void config_write(void)
     }
 }
 
-static char* get_portable_path(void)
+static char* get_portable_path(bool force_portable)
 {
     const char* base_path = SDL_GetBasePath();
     if (base_path == NULL)
@@ -700,13 +699,13 @@ static char* get_portable_path(void)
         {
             std::string portable_path = app_path.substr(0, app_dir_pos + 1);
 
-            if (check_portable(portable_path.c_str()))
+            if (force_portable || check_portable(portable_path.c_str()))
                 return SDL_strdup(portable_path.c_str());
         }
     }
 #endif
 
-    if (check_portable(base_path))
+    if (force_portable || check_portable(base_path))
         return SDL_strdup(base_path);
 
     return NULL;

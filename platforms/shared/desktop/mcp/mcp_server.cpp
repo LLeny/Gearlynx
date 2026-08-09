@@ -171,12 +171,6 @@ void McpServer::HandleLine(const std::string& line)
         return;
     }
 
-    if (method == "initialize" && m_initialized)
-    {
-        reject_or_send_error(request_id, MCP_ERROR_INVALID_REQUEST, "Server already initialized");
-        return;
-    }
-
     if (!m_initialized && method != "initialize" && method != "ping")
     {
         reject_or_send_error(request_id, MCP_ERROR_INVALID_REQUEST, "Server not initialized");
@@ -212,6 +206,10 @@ void McpServer::HandleLine(const std::string& line)
     else if (method == "resources/list")
     {
         HandleResourcesList(request);
+    }
+    else if (method == "resources/templates/list")
+    {
+        HandleResourceTemplatesList(request);
     }
     else if (method == "resources/read")
     {
@@ -2992,6 +2990,18 @@ void McpServer::HandleResourcesList(const json& request)
     response["id"] = id;
     response["result"] = {
         {"resources", resources}
+    };
+
+    SendResponse(response);
+}
+
+void McpServer::HandleResourceTemplatesList(const json& request)
+{
+    json response;
+    response["jsonrpc"] = "2.0";
+    response["id"] = request["id"];
+    response["result"] = {
+        {"resourceTemplates", json::array()}
     };
 
     SendResponse(response);
