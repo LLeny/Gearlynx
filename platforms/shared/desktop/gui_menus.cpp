@@ -1271,6 +1271,7 @@ static void menu_debug(void)
             ImGui::MenuItem("Show Color Registers", "", &config_debug.show_mikey_colors);
             ImGui::MenuItem("Show Audio", "", &config_debug.show_psg);
             ImGui::MenuItem("Show UART", "", &config_debug.show_uart);
+            ImGui::MenuItem("Show ComLynx", "", &config_debug.show_comlynx);
             ImGui::EndMenu();
         }
 
@@ -1397,6 +1398,12 @@ static void menu_comlynx(void)
     const ImVec4 cornflower_blue(0.39f, 0.58f, 0.93f, 1.0f);
     const ImVec4 error_red(0.98f, 0.15f, 0.45f, 1.0f);
 
+#if defined(__APPLE__)
+    if (ImGui::MenuItem("New " GLYNX_TITLE " Window", "", false, application_can_launch_new_instance()))
+        application_launch_new_instance();
+    ImGui::Separator();
+#endif
+
     if (ImGui::MenuItem("Host Session", NULL, false, !active))
         emu_comlynx_host(config_emulator.comlynx_bind_address.c_str(), config_emulator.comlynx_port);
     if (ImGui::MenuItem("Join Session", NULL, false, !active))
@@ -1456,17 +1463,6 @@ static void menu_comlynx(void)
         config_emulator.comlynx_port = CLAMP(config_emulator.comlynx_port, 1, 65535);
 
     ImGui::EndDisabled();
-
-    if (status.mode != ComLynxModeDisabled)
-    {
-        ImGui::Separator();
-
-        ImGui::TextDisabled("TX: %llu  RX: %llu", (unsigned long long)status.frames_sent,
-            (unsigned long long)status.frames_received);
-        if (status.sequence_gaps > 0 || status.queue_overflows > 0)
-            ImGui::TextDisabled("Lost: %llu  Overflow: %llu", (unsigned long long)status.sequence_gaps,
-                (unsigned long long)status.queue_overflows);
-    }
 
     ImGui::EndMenu();
 }

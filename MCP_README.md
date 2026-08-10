@@ -18,29 +18,29 @@ This server provides tools for game development, rom hacking, reverse engineerin
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-windows-x64.mcpb">Gearlynx-1.2.22-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-windows-x64.mcpb">Gearlynx-1.2.23-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-windows-arm64.mcpb">Gearlynx-1.2.22-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-windows-arm64.mcpb">Gearlynx-1.2.23-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>macOS</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-macos-x64.mcpb">Gearlynx-1.2.22-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-macos-x64.mcpb">Gearlynx-1.2.23-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-macos-arm64.mcpb">Gearlynx-1.2.22-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-macos-arm64.mcpb">Gearlynx-1.2.23-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>Linux</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-linux-x64.mcpb">Gearlynx-1.2.22-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-linux-x64.mcpb">Gearlynx-1.2.23-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.22/Gearlynx-1.2.22-mcpb-linux-arm64.mcpb">Gearlynx-1.2.22-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.23/Gearlynx-1.2.23-mcpb-linux-arm64.mcpb">Gearlynx-1.2.23-mcpb-linux-arm64.mcpb</a></td>
     </tr>
   </tbody>
 </table>
@@ -342,7 +342,7 @@ The server exposes tools organized in the following categories:
 - `debug_step_into` - Step into next 6502 instruction (enters subroutines)
 - `debug_step_over` - Step over next 6502 instruction (skips subroutines like JSR)
 - `debug_step_out` - Step out of current subroutine (continues until RTS/RTI)
-- `debug_step_frame` - Step one or more video frames
+- `debug_step_frame` - Step one or more video frames. Optional `frames` is 1-1000 (default 1). Optional `mode` is `async` (default, returns after scheduling) or `sync` (returns after all requested frames complete at VBlank). Use `mode: "sync"` when issuing dependent tool calls.
 - `debug_run_to_cursor` - Continue execution until reaching specified address
 - `debug_reset` - Reset the Atari Lynx emulated system
 - `debug_get_status` - Get debugger status (paused, at_breakpoint, pc address)
