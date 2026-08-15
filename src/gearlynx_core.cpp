@@ -54,6 +54,7 @@ GearlynxCore::GearlynxCore()
     m_comlynx_sync_callback = NULL;
     m_comlynx_sync_user_data = NULL;
     m_comlynx_next_sync_cycle = 0;
+    m_comlynx_sync_cycles = COMLYNX_MAX_SYNC_CYCLES;
 }
 
 GearlynxCore::~GearlynxCore()
@@ -177,14 +178,17 @@ TraceLogger* GearlynxCore::GetTraceLogger()
     return m_trace_logger;
 }
 
-void GearlynxCore::SetComLynxCallbacks(GLYNX_ComLynx_TX_Callback tx_callback,
-    GLYNX_ComLynx_RX_Callback rx_callback, GLYNX_ComLynx_Sync_Callback sync_callback,
-    void* user_data)
+void GearlynxCore::SetComLynxCallbacks(GLYNX_ComLynx_Publish_Callback publish_callback,
+    GLYNX_ComLynx_Sample_Callback sample_callback, GLYNX_ComLynx_Break_Callback break_callback,
+    GLYNX_ComLynx_Sync_Callback sync_callback, void* user_data)
 {
-    m_mikey->SetComLynxCallbacks(tx_callback, rx_callback, user_data);
+    m_mikey->SetComLynxCallbacks(publish_callback, sample_callback, break_callback, sync_callback, user_data);
+
     m_comlynx_sync_callback = sync_callback;
     m_comlynx_sync_user_data = user_data;
+
     m_comlynx_next_sync_cycle = m_total_cycles;
+    m_comlynx_sync_cycles = m_mikey->GetComLynxSyncCycles();
 }
 
 void GearlynxCore::SetComLynxCableConnected(bool connected)
@@ -886,6 +890,8 @@ void GearlynxCore::Reset()
     m_audio->Reset(is_lynx2);
     m_bus->Reset();
     m_input->Reset();
+
+    m_comlynx_sync_cycles = m_mikey->GetComLynxSyncCycles();
 
     if (m_media->GetType() != Media::MEDIA_LYNX)
         PrepareForHomebrew();

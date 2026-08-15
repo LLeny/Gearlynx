@@ -85,9 +85,10 @@ static int get_rewind_pop_budget(void);
 static bool is_direction_key(GLYNX_Keys key);
 static u16 filter_direction_input(u16 state);
 static void update_direction_input(GLYNX_Keys key, bool pressed);
-static void comlynx_tx_callback(u8 data, bool parity_bit, void* user_data);
-static bool comlynx_rx_callback(u8* data, bool* parity_bit, void* user_data);
-static void comlynx_sync_callback(u64 cycles, void* user_data);
+static void comlynx_publish_callback(u64 start_cycle, u32 bit_cycles, u16 bits, void* user_data);
+static bool comlynx_sample_callback(u64 cycle, void* user_data);
+static void comlynx_break_callback(bool asserted, u64 cycle, void* user_data);
+static void comlynx_sync_callback(u64 cycles, u32 promise_cycles, void* user_data);
 
 bool emu_init(void)
 {
@@ -119,8 +120,8 @@ bool emu_init(void)
 
     comlynx_manager = new ComLynxManager();
     comlynx_cable_applied = false;
-    core->SetComLynxCallbacks(comlynx_tx_callback, comlynx_rx_callback,
-        comlynx_sync_callback, comlynx_manager);
+    core->SetComLynxCallbacks(comlynx_publish_callback, comlynx_sample_callback,
+        comlynx_break_callback, comlynx_sync_callback, comlynx_manager);
 
     sound_queue_init();
 
@@ -262,12 +263,13 @@ bool emu_finish_rom_loading(void)
 
 void emu_update(void)
 {
-    emu_mcp_pump_commands();
-    emu_debug_monitor_pump_commands();
-    emu_comlynx_pump();
 
     if (loading_state.load() != Loading_State_None)
         return;
+
+    emu_mcp_pump_commands();
+    emu_debug_monitor_pump_commands();
+    emu_comlynx_pump();
 
     if (emu_is_empty())
         return;
@@ -392,7 +394,9 @@ void emu_update(void)
 
     if ((sampleCount > 0) && !core->IsPaused())
     {
-        sound_queue_write(audio_buffer, sampleCount, emu_audio_sync);
+        bool sync_audio = emu_audio_sync &&
+            (!emu_comlynx_is_active() || comlynx_manager->IsPacingPeer());
+        sound_queue_write(audio_buffer, sampleCount, sync_audio);
     }
     else if (core->IsPaused())
     {
@@ -558,8 +562,12 @@ GLYNX_Bios_State emu_load_bios(const char* file_path)
 void emu_reset(void)
 {
     emu_debug_command = Debug_Command_None;
+    emu_debug_step_frames_pending = 0;
+    emu_debug_pc_changed = true;
+    emu_frame_counter = 0;
     reset_buffers();
     reset_debug();
+    reset_rewind_timing();
     emu_audio_reset();
 
     save_ram();
@@ -961,8 +969,11 @@ void emu_debug_step_frames(int frames)
 void emu_debug_break(void)
 {
     core->Pause(false);
-    if (emu_debug_command == Debug_Command_Continue)
+    if (emu_debug_command == Debug_Command_Continue || emu_debug_command == Debug_Command_StepFrame)
+    {
+        emu_debug_step_frames_pending = 0;
         emu_debug_command = Debug_Command_Step;
+    }
 }
 
 void emu_debug_continue(void)
@@ -2025,7 +2036,7 @@ void emu_mcp_pump_commands(void)
         mcp_manager->PumpCommands(core);
 }
 
-bool emu_comlynx_host(const char* bind_address, int port)
+bool emu_comlynx_connect(int session)
 {
     if (!comlynx_manager)
         return false;
@@ -2035,24 +2046,7 @@ bool emu_comlynx_host(const char* bind_address, int port)
 
     rewind_reset();
 
-    bool started = comlynx_manager->Host(bind_address, port);
-
-    emu_comlynx_pump();
-
-    return started;
-}
-
-bool emu_comlynx_join(const char* host, int port)
-{
-    if (!comlynx_manager)
-        return false;
-
-    config_emulator.ffwd = false;
-    config_audio.sync = true;
-
-    rewind_reset();
-
-    bool started = comlynx_manager->Join(host, port);
+    bool started = comlynx_manager->Connect((u8)session, core->GetComLynxCycle());
 
     emu_comlynx_pump();
 
@@ -2075,13 +2069,6 @@ void emu_comlynx_pump(void)
 {
     if (!comlynx_manager || !core)
         return;
-
-    Mikey::Mikey_State* mikey_state = core->GetMikey()->GetState();
-
-    bool receive_enabled = !emu_is_empty() && !emu_is_paused() && !emu_is_debug_idle() &&
-        IS_SET_BIT(mikey_state->timers[4].control_a, 3);
-
-    comlynx_manager->SetReceiveEnabled(receive_enabled);
 
     bool cable_connected = comlynx_manager->IsCableConnected();
 
@@ -2119,38 +2106,34 @@ void emu_comlynx_reset_metrics(void)
         comlynx_manager->ResetMetrics();
 }
 
-static void comlynx_tx_callback(u8 data, bool parity_bit, void* user_data)
+static void comlynx_publish_callback(u64 start_cycle, u32 bit_cycles, u16 bits, void* user_data)
 {
     ComLynxManager* manager = (ComLynxManager*)user_data;
 
     if (manager)
-        manager->SendFrame(data, parity_bit);
+        manager->PublishFrame(start_cycle, bit_cycles, bits);
 }
 
-static bool comlynx_rx_callback(u8* data, bool* parity_bit, void* user_data)
+static bool comlynx_sample_callback(u64 cycle, void* user_data)
 {
     ComLynxManager* manager = (ComLynxManager*)user_data;
-
-    if (!manager || !data || !parity_bit)
-        return false;
-
-    ComLynxFrame frame;
-
-    if (!manager->ReceiveFrame(frame))
-        return false;
-
-    *data = frame.data;
-    *parity_bit = frame.parity_bit;
-
-    return true;
+    return manager ? manager->SampleLine(cycle) : true;
 }
 
-static void comlynx_sync_callback(u64 cycles, void* user_data)
+static void comlynx_break_callback(bool asserted, u64 cycle, void* user_data)
 {
     ComLynxManager* manager = (ComLynxManager*)user_data;
 
     if (manager)
-        manager->Synchronize(cycles);
+        manager->SetBreak(asserted, cycle);
+}
+
+static void comlynx_sync_callback(u64 cycles, u32 promise_cycles, void* user_data)
+{
+    ComLynxManager* manager = (ComLynxManager*)user_data;
+
+    if (manager)
+        manager->Synchronize(cycles, promise_cycles);
 }
 
 void emu_debug_monitor_start(int port)

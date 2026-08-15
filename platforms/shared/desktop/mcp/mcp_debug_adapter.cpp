@@ -179,6 +179,7 @@ json DebugAdapter::GetDebugStatus()
     bool is_paused = emu_is_debug_idle();
 
     result["paused"] = is_paused;
+    result["total_cycles"] = m_core->GetTotalCycles();
 
     if (is_paused)
     {
@@ -1343,11 +1344,14 @@ json DebugAdapter::WriteSuzyRegister(u16 address, u8 value)
 
 json DebugAdapter::GetUARTStatus()
 {
-    Mikey::Mikey_State* mikey_state = m_core->GetMikey()->GetState();
+    Mikey* mikey = m_core->GetMikey();
+    Mikey::Mikey_State* mikey_state = mikey->GetState();
 
     json status;
     std::ostringstream ss;
     ss << std::hex << std::uppercase << std::setfill('0');
+
+    status["baud_rate"] = GLYNX_MASTER_CLOCK / mikey->GetUartBitCycles();
 
     // Register values
     json registers;
@@ -1403,34 +1407,34 @@ json DebugAdapter::GetUARTStatus()
 
     ComLynxStatus comlynx = emu_comlynx_get_status();
     json network;
-    network["frames_generated"] = comlynx.frames_generated;
-    network["frames_sent"] = comlynx.frames_sent;
-    network["frames_received_network"] = comlynx.frames_received_network;
-    network["frames_queued"] = comlynx.frames_queued;
-    network["frames_consumed"] = comlynx.frames_consumed;
-    network["frames_dropped_disabled"] = comlynx.frames_dropped_disabled;
-    network["frames_dropped_clear"] = comlynx.frames_dropped_clear;
-    network["datagrams_sent"] = comlynx.datagrams_sent;
-    network["datagrams_received"] = comlynx.datagrams_received;
-    network["send_eagain"] = comlynx.send_eagain;
-    network["send_errors"] = comlynx.send_errors;
-    network["sequence_gaps"] = comlynx.sequence_gaps;
-    network["out_of_order_packets"] = comlynx.out_of_order_packets;
-    network["duplicate_packets"] = comlynx.duplicate_packets;
-    network["queue_overflows"] = comlynx.queue_overflows;
-    network["max_outgoing_queue_depth"] = comlynx.max_outgoing_queue_depth;
-    network["max_incoming_queue_depth"] = comlynx.max_incoming_queue_depth;
-    network["max_pending_packet_depth"] = comlynx.max_pending_packet_depth;
-    network["frame_rx_interval_min_us"] = comlynx.frame_rx_interval_min_us;
-    network["frame_rx_interval_avg_us"] = comlynx.frame_rx_interval_avg_us;
-    network["frame_rx_interval_max_us"] = comlynx.frame_rx_interval_max_us;
-    network["frame_rx_interval_variation_us"] = comlynx.frame_rx_interval_variation_us;
-    network["rx_bursts"] = comlynx.rx_bursts;
-    network["rx_burst_max"] = comlynx.rx_burst_max;
-    network["rx_burst_total_packets"] = comlynx.rx_burst_total_packets;
+    network["transport"] = "shared_memory";
+    network["session"] = comlynx.session;
+    network["local_peer_id"] = comlynx.local_peer_id;
+    network["peer_count"] = comlynx.peer_count;
+    network["frames_published"] = comlynx.frames_published;
+    network["line_samples"] = comlynx.line_samples;
+    network["low_samples"] = comlynx.low_samples;
+    network["barrier_waits"] = comlynx.barrier_waits;
+    network["barrier_wait_us"] = comlynx.barrier_wait_us;
+    network["barrier_wait_max_us"] = comlynx.barrier_wait_max_us;
+    network["barrier_wait_over_1ms"] = comlynx.barrier_wait_over_1ms;
+    network["barrier_wait_over_10ms"] = comlynx.barrier_wait_over_10ms;
+    network["barrier_wait_over_50ms"] = comlynx.barrier_wait_over_50ms;
+    network["sync_gap_max_us"] = comlynx.sync_gap_max_us;
+    network["sync_gap_over_50ms"] = comlynx.sync_gap_over_50ms;
+    network["peer_detaches"] = comlynx.peer_detaches;
+    network["peer_detach_max_age_us"] = comlynx.peer_detach_max_age_us;
+    network["reattachments"] = comlynx.reattachments;
+    network["pacing_peer"] = comlynx.pacing_peer;
     status["comlynx"] = network;
 
     return status;
+}
+
+json DebugAdapter::ResetComLynxMetrics()
+{
+    emu_comlynx_reset_metrics();
+    return {{"success", true}};
 }
 
 static const char* get_eeprom_type_name(GLYNX_EEPROM type)
@@ -3255,10 +3259,90 @@ json DebugAdapter::GetTraceLog(int start, int count)
                          entry.timer.timer_id, entry.timer.backup);
                 break;
             case TRACE_MIKEY_UART:
-                snprintf(buf, sizeof(buf), "  [MIKEY] UART %s  Data:$%02X%s",
-                         entry.uart.is_tx ? "TX" : "RX", entry.uart.data,
-                         (!entry.uart.is_tx && entry.uart.flags) ? "  [ERR]" : "");
+            {
+                char source[16] = "";
+                char gap[24] = "";
+                char lost[24] = "";
+
+                if (entry.uart.kind == GLYNX_UART_TRACE_CFG)
+                {
+                    bool turbo = (entry.uart.flags & 0x20) != 0;
+                    u32 baud = turbo ? 1000000u : 1000000u / ((entry.uart.backup + 1u) * 8u);
+                    snprintf(buf, sizeof(buf), "  [MIKEY] UART CFG SERCTL:$%02X  %lu baud  %s  TX:%s RX:%s%s%s",
+                             entry.uart.data, (unsigned long)baud,
+                             (entry.uart.data & 0x10) ? ((entry.uart.data & 0x01) ? "PAR:EVEN" : "PAR:ODD ") : "PAR:OFF ",
+                             (entry.uart.data & 0x80) ? "IRQ" : "-  ",
+                             (entry.uart.data & 0x40) ? "IRQ" : "-  ",
+                             (entry.uart.data & 0x04) ? "  TXOPEN" : "",
+                             (entry.uart.data & 0x02) ? "  BREAK" : "");
+                    break;
+                }
+
+                if (entry.uart.kind == GLYNX_UART_TRACE_TX)
+                {
+                    if (entry.uart.chained)
+                        snprintf(source, sizeof(source), "  [CHAINED]");
+                }
+                else
+                {
+                    if (entry.uart.kind == GLYNX_UART_TRACE_RX)
+                        snprintf(source, sizeof(source), "  SRC:%s", entry.uart.source == 0 ? "LOCAL" : "LINK");
+
+                    snprintf(gap, sizeof(gap), entry.uart.kind == GLYNX_UART_TRACE_RD ? "  HELD:%uus" : "  GAP:%uus",
+                             (unsigned)entry.uart.gap_us);
+
+                    if (entry.uart.flags & 0x10)
+                        snprintf(lost, sizeof(lost), "  [OVERRUN lost:$%02X]", entry.uart.lost);
+                }
+
+                static const char* k_kind[] = { "TX", "RX", "RD" };
+
+                snprintf(buf, sizeof(buf), "  [MIKEY] UART %s  Data:$%02X  BIT9:%d%s%s%s%s%s%s",
+                         k_kind[entry.uart.kind < 3 ? entry.uart.kind : 0], entry.uart.data,
+                         (entry.uart.flags & 0x01) ? 1 : 0, source, gap, lost,
+                         (entry.uart.flags & 0x02) ? "  [PARERR]" : "",
+                         (entry.uart.flags & 0x04) ? "  [FRAMERR]" : "",
+                         (entry.uart.flags & 0x08) ? "  [BREAK]" : "");
                 break;
+            }
+            case TRACE_REDEYE:
+            {
+                static const char* k_msg[] = { "LOGON  ", "MSG1   ", "START  ", "DATA   ",
+                                               "REQUEST", "RESEND ", "MSG6   ", "MSG7   " };
+                const char* csum = entry.redeye.checksum_ok ? "" : "  [BAD CSUM]";
+                u8 msg = entry.redeye.msg & 7;
+                const char* dir = entry.redeye.dir ? "RX" : "TX";
+
+                if (entry.redeye.size == 5 && (msg == 0 || msg == 2) && entry.redeye.len >= 4)
+                {
+                    snprintf(buf, sizeof(buf), "  [REDEYE] %s %s plr:%d  players:$%02X  game:$%02X%02X%s",
+                             dir, k_msg[msg], entry.redeye.payload[0], entry.redeye.payload[1],
+                             entry.redeye.payload[3], entry.redeye.payload[2], csum);
+                    break;
+                }
+
+                if (msg == 5 && entry.redeye.len >= 1)
+                {
+                    snprintf(buf, sizeof(buf), "  [REDEYE] %s %s p%d seq%d  players:$%02X%s",
+                             dir, k_msg[msg], entry.redeye.player, entry.redeye.seq,
+                             entry.redeye.payload[0], csum);
+                    break;
+                }
+
+                char payload[48] = "";
+                int at = 0;
+
+                if (entry.redeye.len > 0)
+                    at = snprintf(payload, sizeof(payload), "  data:");
+
+                for (int i = 0; i < entry.redeye.len && at < (int)sizeof(payload) - 4; i++)
+                    at += snprintf(payload + at, sizeof(payload) - at, " %02X", entry.redeye.payload[i]);
+
+                snprintf(buf, sizeof(buf), "  [REDEYE] %s %s p%d seq%d  size:%d%s%s",
+                         dir, k_msg[msg], entry.redeye.player, entry.redeye.seq,
+                         entry.redeye.size, payload, csum);
+                break;
+            }
             case TRACE_MIKEY_AUDIO:
             {
                 static const char* k_audio_regs[] = {"VOL","FDBK","OUT","LFSR","BKUP","CTL","CNT","MISC"};
@@ -3319,6 +3403,7 @@ json DebugAdapter::SetTraceLog(bool enabled, u32 flags, bool debug_output)
         if (flags & TRACE_FLAG_SUZY_INPUT) enabled_list.push_back("suzy_input");
         if (flags & TRACE_FLAG_MIKEY_TIMER) enabled_list.push_back("mikey_timers");
         if (flags & TRACE_FLAG_MIKEY_UART) enabled_list.push_back("mikey_uart");
+        if (flags & TRACE_FLAG_REDEYE) enabled_list.push_back("redeye");
         if (flags & TRACE_FLAG_MIKEY_AUDIO) enabled_list.push_back("mikey_audio");
         if (flags & TRACE_FLAG_CART_SHIFT) enabled_list.push_back("cart");
         if (flags & TRACE_FLAG_DEBUG_MSG) enabled_list.push_back("debug_messages");

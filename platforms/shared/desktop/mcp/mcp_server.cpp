@@ -434,7 +434,7 @@ json McpServer::BuildToolList()
     tools.push_back({
         {"name", "debug_get_status"},
         {"title", "Get Debug Status"},
-        {"description", "Read debugger state: paused, breakpoint hit, current PC."},
+        {"description", "Read debugger state: paused, breakpoint hit, current PC, total emulated cycles."},
         {"annotations", {{"readOnlyHint", true}, {"destructiveHint", false}, {"idempotentHint", true}, {"openWorldHint", false}}},
         {"inputSchema", {
             {"type", "object"},
@@ -850,6 +850,17 @@ json McpServer::BuildToolList()
         {"title", "Get UART Status"},
         {"description", "Read UART/ComLynx serial status."},
         {"annotations", {{"readOnlyHint", true}, {"destructiveHint", false}, {"idempotentHint", true}, {"openWorldHint", false}}},
+        {"inputSchema", {
+            {"type", "object"},
+            {"additionalProperties", false}
+        }}
+    });
+
+    tools.push_back({
+        {"name", "reset_comlynx_metrics"},
+        {"title", "Reset ComLynx Metrics"},
+        {"description", "Reset ComLynx transport and stall diagnostics."},
+        {"annotations", {{"readOnlyHint", false}, {"destructiveHint", false}, {"idempotentHint", true}, {"openWorldHint", false}}},
         {"inputSchema", {
             {"type", "object"},
             {"additionalProperties", false}
@@ -1699,7 +1710,11 @@ json McpServer::BuildToolList()
                         }},
                         {"mikey_uart", {
                             {"type", "boolean"},
-                            {"description", "Mikey UART TX/RX. Default true."}
+                            {"description", "Mikey UART frames, reads and config. Default true."}
+                        }},
+                        {"redeye", {
+                            {"type", "boolean"},
+                            {"description", "RedEye packets reassembled from ComLynx traffic. Default true."}
                         }},
                         {"mikey_audio", {
                             {"type", "boolean"},
@@ -2504,6 +2519,10 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
     {
         return m_debugAdapter.GetUARTStatus();
     }
+    else if (normalizedTool == "reset_comlynx_metrics")
+    {
+        return m_debugAdapter.ResetComLynxMetrics();
+    }
     else if (normalizedTool == "get_cart_status")
     {
         return m_debugAdapter.GetCartStatus();
@@ -2791,6 +2810,7 @@ json McpServer::ExecuteCommand(const std::string& toolName, const json& argument
             if (filters.value("suzy_input", true)) flags |= TRACE_FLAG_SUZY_INPUT;
             if (filters.value("mikey_timers", true)) flags |= TRACE_FLAG_MIKEY_TIMER;
             if (filters.value("mikey_uart", true)) flags |= TRACE_FLAG_MIKEY_UART;
+            if (filters.value("redeye", true)) flags |= TRACE_FLAG_REDEYE;
             if (filters.value("mikey_audio", true)) flags |= TRACE_FLAG_MIKEY_AUDIO;
             if (filters.value("cart", true)) flags |= TRACE_FLAG_CART_SHIFT;
             if (filters.value("debug_messages", true)) flags |= TRACE_FLAG_DEBUG_MSG;

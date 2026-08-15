@@ -4,6 +4,7 @@
 *.app/
 platforms/macos/mcp
 docs/
+tools/
 
 # Visual Studio files
 .vscode/mcp.json
@@ -70,6 +71,7 @@ xcuserdata/
 platforms/**/gearlynx
 tests/**/gearlynx-tests
 tests/**/gearlynx-comlynx-tests
+tests/**/gearlynx-comlynx-tests.dSYM/
 binary_to_compressed_c
 
 #Switch

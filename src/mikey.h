@@ -61,6 +61,7 @@ public:
         u8 CPUSLEEP;
         u8 DISPCTL;
         u8 PBKUP;
+        u8 MTEST0;
         u16_union DISPADR;
         u8 irq_pending;
         u8 irq_mask;
@@ -69,6 +70,7 @@ public:
         u16 dispadr_latch;
         bool rest;
         u32 refresh_cycle_counter;
+        u32 timer_source_phase;
         char debug_msg_buffer[GLYNX_DEBUG_MSG_MAX_SIZE];
         int debug_msg_pos;
         u16_union debug_str_addr;
@@ -93,16 +95,23 @@ public:
     bool IsDebugOutputEnabled();
     void SaveState(std::ostream& stream);
     void LoadState(std::istream& stream, int version);
-    void SetComLynxCallbacks(GLYNX_ComLynx_TX_Callback tx_callback,
-        GLYNX_ComLynx_RX_Callback rx_callback, void* user_data);
+    void SetComLynxCallbacks(GLYNX_ComLynx_Publish_Callback publish_callback,
+        GLYNX_ComLynx_Sample_Callback sample_callback, GLYNX_ComLynx_Break_Callback break_callback,
+        GLYNX_ComLynx_Sync_Callback sync_callback, void* user_data);
     void SetComLynxCableConnected(bool connected);
     bool IsComLynxCableConnected() const;
+    bool IsUartTurbo() const;
+    u32 GetUartBitCycles() const;
+    u32 GetComLynxSyncCycles() const;
+    u32 GetComLynxPromiseCycles() const;
+    u64 GetComLynxCycle() const;
 
 private:
     void ResetTimers();
     void ResetAudio();
     void ResetUART();
     void ResetPalette();
+    u32 GetTimerAccessCycles(int timer);
     u8 ReadColor(u16 address);
     void WriteColor(u16 address, u8 value);
     template<bool debug = false> u8 ReadTimer(u16 address);
@@ -113,9 +122,13 @@ private:
     void WriteAudioExtra(u16 address, u8 value);
     void Advance(u32 cycles);
     void SynchronizeCPURead();
-    void UpdateTimers(u32 cycles);
+    void UpdateUART(u32 cycles);
+    void UpdateTimerHardware(u32 cycles);
+    void ClockTimer(int timer);
+    void ClockAudio(int channel);
+    void ServiceTimer(int timer);
+    void ServiceAudio(int channel);
     bool BorrowInTimer(int i, GLYNX_Mikey_Timer* t);
-    void UpdateAudio(u32 cycles);
     bool BorrowInChannel(int i, GLYNX_Mikey_Audio* c);
     void AdvanceLFSR(u8 channel);
     void RebuildTapsMask(GLYNX_Mikey_Audio* channel);
@@ -124,9 +137,13 @@ private:
     void UpdateIRQs();
     void UartRelevelIRQ();
     void UartRxReflectHead();
-    void UartRxPush(u8 data, bool parbit, bool parerr, bool framerr, bool rxbreak);
-    void UartBeginFrame(u8 data);
-    void UartClock();
+    void UartRxPush(u8 data, bool parbit, bool parerr, bool framerr, bool rxbreak, u8 source);
+    u16 UartCyclesToMicros(u32 cycles);
+    void RedEyeFeed(u8 dir, u8 data);
+    void UartBeginFrame(u8 data, bool chained);
+    bool UartWireLevel() const;
+    void UartReceiveWire(bool level, bool peer_low);
+    void UartClock(bool turbo);
     void HorizontalBlank();
     void UpdateVideo(u32 cycles);
     void Serialize(StateSerializer& s, int version);
@@ -146,11 +163,35 @@ private:
     bool m_debug_output_enabled;
     TraceLogger* m_trace_logger;
     u32 m_cpu_read_cycles;
-    GLYNX_ComLynx_TX_Callback m_comlynx_tx_callback;
-    GLYNX_ComLynx_RX_Callback m_comlynx_rx_callback;
+    GLYNX_ComLynx_Publish_Callback m_comlynx_publish_callback;
+    GLYNX_ComLynx_Sample_Callback m_comlynx_sample_callback;
+    GLYNX_ComLynx_Break_Callback m_comlynx_break_callback;
+    GLYNX_ComLynx_Sync_Callback m_comlynx_sync_callback;
     void* m_comlynx_user_data;
     bool m_comlynx_cable_connected;
-    u8 m_comlynx_rx_spacing_bits;
+    u64 m_comlynx_cycle;
+    u64 m_uart_last_bit_cycle;
+    u64 m_uart_tx_wire_start;
+    u32 m_uart_tx_wire_bit_cycles;
+    u16 m_uart_tx_wire_bits;
+    bool m_uart_tx_wire_published;
+    u8 m_uart_rx_wire_state;
+    u8 m_uart_rx_wire_bit;
+    u8 m_uart_rx_wire_data;
+    bool m_uart_rx_wire_parity;
+    bool m_uart_rx_wire_link;
+    u8 m_uart_trace_cfg;
+    u8 m_uart_trace_backup;
+    u32 m_video_line_remainder;
+
+    struct RedEyeStream
+    {
+        u8 buffer[64];
+        u8 count;
+        u8 total;
+    };
+
+    RedEyeStream m_redeye[2];
 };
 
 static const u32 k_mikey_timer_period_us[8] = { 1, 2, 4, 8, 16, 32, 64, 0 };

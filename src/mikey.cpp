@@ -39,11 +39,23 @@ Mikey::Mikey(Suzy* suzy, Media* media, M6502* m6502, Bus* bus, Random* random)
     InitPointer(m_trace_logger);
     m_debug_output_enabled = false;
     m_cpu_read_cycles = 0;
-    m_comlynx_tx_callback = NULL;
-    m_comlynx_rx_callback = NULL;
+    m_comlynx_publish_callback = NULL;
+    m_comlynx_sample_callback = NULL;
+    m_comlynx_break_callback = NULL;
+    m_comlynx_sync_callback = NULL;
     m_comlynx_user_data = NULL;
     m_comlynx_cable_connected = false;
-    m_comlynx_rx_spacing_bits = 0;
+    m_comlynx_cycle = 0;
+    m_uart_last_bit_cycle = 0;
+    m_uart_tx_wire_start = 0;
+    m_uart_tx_wire_bit_cycles = 0;
+    m_uart_tx_wire_bits = 0x07FF;
+    m_uart_tx_wire_published = false;
+    m_uart_rx_wire_state = 0;
+    m_uart_rx_wire_bit = 0;
+    m_uart_rx_wire_data = 0;
+    m_uart_rx_wire_parity = false;
+    m_uart_rx_wire_link = false;
 }
 
 Mikey::~Mikey()
@@ -81,12 +93,19 @@ bool Mikey::IsDebugOutputEnabled()
 
 void Mikey::Reset(bool is_lynx2)
 {
+    if (m_state.uart.tx_open && m_state.uart.tx_brk &&
+        m_comlynx_cable_connected && m_comlynx_break_callback)
+    {
+        m_comlynx_break_callback(false, m_comlynx_cycle, m_comlynx_user_data);
+    }
+
     memset(&m_state, 0, sizeof(Mikey_State));
     m_state.suzy_done_pending = true;
     m_cpu_read_cycles = 0;
 
     m_is_lynx2 = is_lynx2;
     m_state.SYSCTL1 = 0x02;
+    m_state.MTEST0 = 0;
 
     m_lcd_screen->Reset();
 
@@ -98,6 +117,8 @@ void Mikey::Reset(bool is_lynx2)
 
 void Mikey::ResetTimers()
 {
+    m_state.timer_source_phase = m_random->Next(7) + 1;
+
     for (int i = 0; i < 8; i++)
     {
         m_state.timers[i].backup = 0;
@@ -105,7 +126,6 @@ void Mikey::ResetTimers()
         m_state.timers[i].control_a = 0;
         m_state.timers[i].control_b = 0;
 
-        m_state.timers[i].internal_cycles = 0;
         m_state.timers[i].internal_period_cycles = k_mikey_timer_period_cycles[0];
         m_state.timers[i].internal_pending_ticks = 0;
     }
@@ -126,7 +146,6 @@ void Mikey::ResetAudio()
         m_state.audio[i].counter = 0;
         m_state.audio[i].other = 0;
 
-        m_state.audio[i].internal_cycles = 0;
         m_state.audio[i].internal_period_cycles = k_mikey_timer_period_cycles[0];
         m_state.audio[i].internal_pending_ticks = 0;
         m_state.audio[i].internal_lfsr = 0;
@@ -170,7 +189,25 @@ void Mikey::ResetUART()
     m_state.uart.tx_empty_bits = 0;
     m_state.uart.tx_ready_bits = 0;
     m_state.uart.tx_started_from_chain = false;
-    m_comlynx_rx_spacing_bits = 0;
+    m_state.uart.tx_empty_cycles = 0;
+    m_state.uart.tx_start_bits = 0;
+    m_state.uart.rx_age_cycles = 0;
+    m_uart_trace_cfg = 0xFF;
+    m_uart_trace_backup = 0xFF;
+    m_redeye[0].count = 0;
+    m_redeye[0].total = 0;
+    m_redeye[1].count = 0;
+    m_redeye[1].total = 0;
+    m_uart_last_bit_cycle = 0;
+    m_uart_tx_wire_start = 0;
+    m_uart_tx_wire_bit_cycles = 0;
+    m_uart_tx_wire_bits = 0x07FF;
+    m_uart_tx_wire_published = false;
+    m_uart_rx_wire_state = 0;
+    m_uart_rx_wire_bit = 0;
+    m_uart_rx_wire_data = 0;
+    m_uart_rx_wire_parity = false;
+    m_uart_rx_wire_link = false;
 }
 
 void Mikey::ResetPalette()
@@ -236,7 +273,7 @@ void Mikey::HorizontalBlank()
         m_lcd_screen->ResetVisibleLine(visible_line);
     }
 
-    m_lcd_screen->ResetLine(m_state.timers[0].internal_cycles);
+    m_lcd_screen->ResetLine(m_video_line_remainder);
 }
 
 bool Mikey::SwitchAudInValue()
@@ -244,11 +281,14 @@ bool Mikey::SwitchAudInValue()
     return IS_SET_BIT(m_state.IODIR, 4) && IS_SET_BIT(m_state.IODAT, 4);
 }
 
-void Mikey::SetComLynxCallbacks(GLYNX_ComLynx_TX_Callback tx_callback,
-    GLYNX_ComLynx_RX_Callback rx_callback, void* user_data)
+void Mikey::SetComLynxCallbacks(GLYNX_ComLynx_Publish_Callback publish_callback,
+    GLYNX_ComLynx_Sample_Callback sample_callback, GLYNX_ComLynx_Break_Callback break_callback,
+    GLYNX_ComLynx_Sync_Callback sync_callback, void* user_data)
 {
-    m_comlynx_tx_callback = tx_callback;
-    m_comlynx_rx_callback = rx_callback;
+    m_comlynx_publish_callback = publish_callback;
+    m_comlynx_sample_callback = sample_callback;
+    m_comlynx_break_callback = break_callback;
+    m_comlynx_sync_callback = sync_callback;
     m_comlynx_user_data = user_data;
 }
 
@@ -257,12 +297,19 @@ void Mikey::SetComLynxCableConnected(bool connected)
     m_comlynx_cable_connected = connected;
 
     if (!connected)
-        m_comlynx_rx_spacing_bits = 0;
+    {
+        m_uart_rx_wire_state = 0;
+    }
 }
 
 bool Mikey::IsComLynxCableConnected() const
 {
     return m_comlynx_cable_connected;
+}
+
+u64 Mikey::GetComLynxCycle() const
+{
+    return m_comlynx_cycle;
 }
 
 void Mikey::SaveState(std::ostream& stream)
@@ -278,12 +325,20 @@ void Mikey::LoadState(std::istream& stream, int version)
     StateSerializer serializer(stream);
     Serialize(serializer, version);
     m_cpu_read_cycles = 0;
+    m_uart_tx_wire_start = 0;
+    m_uart_tx_wire_bit_cycles = 0;
+    m_uart_tx_wire_bits = 0x07FF;
+    m_uart_tx_wire_published = false;
+    m_uart_rx_wire_state = 0;
+    m_uart_rx_wire_link = false;
 
     m_lcd_screen->LoadState(stream);
 }
 
 void Mikey::Serialize(StateSerializer& s, int version)
 {
+    u32 legacy_timer0_cycles = 0;
+
     if (version >= 13)
         G_SERIALIZE(s, m_is_lynx2);
 
@@ -294,7 +349,13 @@ void Mikey::Serialize(StateSerializer& s, int version)
         G_SERIALIZE(s, m_state.timers[i].control_b);
         G_SERIALIZE(s, m_state.timers[i].counter);
 
-        G_SERIALIZE(s, m_state.timers[i].internal_cycles);
+        if (version < 24)
+        {
+            u32 legacy_cycles = 0;
+            G_SERIALIZE(s, legacy_cycles);
+            if (i == 0)
+                legacy_timer0_cycles = legacy_cycles;
+        }
         G_SERIALIZE(s, m_state.timers[i].internal_period_cycles);
         G_SERIALIZE(s, m_state.timers[i].internal_pending_ticks);
     }
@@ -316,7 +377,11 @@ void Mikey::Serialize(StateSerializer& s, int version)
         G_SERIALIZE(s, m_state.audio[i].counter);
         G_SERIALIZE(s, m_state.audio[i].other);
 
-        G_SERIALIZE(s, m_state.audio[i].internal_cycles);
+        if (version < 24)
+        {
+            u32 legacy_cycles = 0;
+            G_SERIALIZE(s, legacy_cycles);
+        }
         G_SERIALIZE(s, m_state.audio[i].internal_period_cycles);
         G_SERIALIZE(s, m_state.audio[i].internal_pending_ticks);
         G_SERIALIZE(s, m_state.audio[i].internal_lfsr);
@@ -355,6 +420,22 @@ void Mikey::Serialize(StateSerializer& s, int version)
     G_SERIALIZE_ARRAY(s, m_state.uart.rxq_data, 2);
     G_SERIALIZE_ARRAY(s, m_state.uart.rxq_flags, 2);
 
+    if (version >= 22)
+    {
+        G_SERIALIZE(s, m_state.uart.tx_start_bits);
+        G_SERIALIZE(s, m_state.uart.rx_age_cycles);
+    }
+    else if (s.IsLoading())
+    {
+        m_state.uart.tx_start_bits = 0;
+        m_state.uart.rx_age_cycles = 0;
+    }
+
+    if (version >= 23)
+        G_SERIALIZE(s, m_state.uart.tx_empty_cycles);
+    else if (s.IsLoading())
+        m_state.uart.tx_empty_cycles = 0;
+
     G_SERIALIZE(s, m_state.ATTEN_A);
     G_SERIALIZE(s, m_state.ATTEN_B);
     G_SERIALIZE(s, m_state.ATTEN_C);
@@ -380,10 +461,20 @@ void Mikey::Serialize(StateSerializer& s, int version)
     G_SERIALIZE(s, m_state.rest);
     G_SERIALIZE(s, m_state.refresh_cycle_counter);
 
+    if (version >= 23)
+        G_SERIALIZE(s, m_state.timer_source_phase);
+    else if (s.IsLoading())
+        m_state.timer_source_phase = legacy_timer0_cycles & 1023;
+
     if (version >= 20)
         G_SERIALIZE(s, m_state.suzy_done_pending);
     else if (s.IsLoading())
         m_state.suzy_done_pending = false;
+
+    if (version >= 25)
+        G_SERIALIZE(s, m_state.MTEST0);
+    else if (s.IsLoading())
+        m_state.MTEST0 = 0;
 }
 
 void Mikey::DebugOutputFlush()
