@@ -62,7 +62,7 @@ void Audio::Init()
 void Audio::Reset(bool is_lynx2)
 {
     m_is_lynx2 = is_lynx2;
-    m_cycles = 0;
+    m_sample_phase = 0;
     m_buffer_pos = 0;
     m_frame_samples = 0;
     m_lpf_left = 0;
@@ -114,11 +114,6 @@ void Audio::EndFrame(s16* sample_buffer, int* sample_count)
             sample_buffer[i + 1] = (s16)out_right;
         }
     }
-
-#ifndef GLYNX_DISABLE_VGMRECORDER
-    if (m_vgm_recording_enabled)
-        m_vgm_recorder.UpdateTiming(m_frame_samples / 2);
-#endif
 
     m_buffer_pos = 0;
 }
@@ -172,7 +167,9 @@ void Audio::Serialize(StateSerializer& s, int version)
 {
     if (version >= 13)
         G_SERIALIZE(s, m_is_lynx2);
-    G_SERIALIZE(s, m_cycles);
+    G_SERIALIZE(s, m_sample_phase);
+    if (s.IsLoading() && version < 26)
+        m_sample_phase = 0;
     G_SERIALIZE(s, m_lpf_left);
     G_SERIALIZE(s, m_lpf_right);
     G_SERIALIZE(s, m_buffer_pos);
@@ -184,12 +181,12 @@ void Audio::Serialize(StateSerializer& s, int version)
     }
 }
 
-bool Audio::StartVgmRecording(const char* file_path, int clock_rate)
+bool Audio::StartVgmRecording(const char* file_path, int clock_rate, const VgmMetadata& metadata)
 {
     if (m_vgm_recording_enabled)
         return false;
 
-    m_vgm_recorder.Start(file_path, clock_rate);
+    m_vgm_recorder.Start(file_path, clock_rate, metadata);
     m_vgm_recording_enabled = m_vgm_recorder.IsRecording();
 
     // Write initial state of all audio registers to VGM
@@ -197,6 +194,16 @@ bool Audio::StartVgmRecording(const char* file_path, int clock_rate)
     {
         // Get Mikey state
         Mikey::Mikey_State* mikey_state = m_mikey->GetState();
+
+        // Write initial state of timers used by the audio link ring
+        for (int i = 1; i < 8; i += 2)
+        {
+            u16 base = 0xFD00 + (i * 4);
+            m_vgm_recorder.WriteMikey(base + 0, mikey_state->timers[i].backup);
+            m_vgm_recorder.WriteMikey(base + 1, mikey_state->timers[i].control_a);
+            m_vgm_recorder.WriteMikey(base + 2, mikey_state->timers[i].counter);
+            m_vgm_recorder.WriteMikey(base + 3, mikey_state->timers[i].control_b & ~0x02);
+        }
 
         // Write audio channel registers (0xFD20-0xFD3F)
         for (int i = 0; i < 4; i++)
@@ -225,7 +232,7 @@ bool Audio::StartVgmRecording(const char* file_path, int clock_rate)
             m_vgm_recorder.WriteMikey(base + 6, mikey_state->audio[i].counter);
 
             // AUDnMISC
-            m_vgm_recorder.WriteMikey(base + 7, mikey_state->audio[i].other);
+            m_vgm_recorder.WriteMikey(base + 7, mikey_state->audio[i].other & ~0x02);
         }
 
         // Write audio extra registers

@@ -27,26 +27,15 @@
 #include "comlynx_wire.h"
 #include "log.h"
 
-#define COMLYNX_SHM_MAGIC 0x584C4347
-#define COMLYNX_SHM_VERSION 1
+#define COMLYNX_SHM_MAGIC 0x4C594E58
+#define COMLYNX_SHM_VERSION 3
 #define COMLYNX_SHARED_FRAME_COUNT 64
-#define COMLYNX_DETACH_US 50000
 #define COMLYNX_BARRIER_SPIN_US 250
 #define COMLYNX_BARRIER_SLEEP_US 100
+#define COMLYNX_TURBO_MAINTENANCE_CYCLES 4096
 
 struct ComLynxManager::Shared
 {
-    struct Frame
-    {
-        std::atomic<u32> sequence;
-        u32 generation;
-        u64 start_cycle;
-        u32 bit_cycles;
-        u16 bits;
-
-        Frame() : sequence(0), generation(0), start_cycle(0), bit_cycles(0), bits(0) {}
-    };
-
     struct Peer
     {
         std::atomic<u32> state;
@@ -55,7 +44,7 @@ struct ComLynxManager::Shared
         std::atomic<u64> promise_cycle;
         std::atomic<u64> break_from;
         std::atomic<u32> write_index;
-        Frame frames[COMLYNX_SHARED_FRAME_COUNT];
+        ComLynxSharedFrame frames[COMLYNX_SHARED_FRAME_COUNT];
 
         Peer() : state(0), generation(0), heartbeat_us(0), promise_cycle(0),
             break_from(0), write_index(0) {}
@@ -84,6 +73,8 @@ ComLynxManager::ComLynxManager()
     m_local_anchor = 0;
     m_bus_anchor = 0;
     m_last_sync_exit_us = 0;
+    m_turbo_next_maintenance_cycle = 0;
+    m_normal_barrier_stall_us = comlynx_normal_barrier_stall_us();
     memset(&m_status, 0, sizeof(m_status));
     m_status.mode = ComLynxModeDisabled;
 }
@@ -143,6 +134,7 @@ void ComLynxManager::Stop()
     m_slot = -1;
     m_generation = 0;
     m_session = 0;
+    m_turbo_next_maintenance_cycle = 0;
 
     memset(&m_status, 0, sizeof(m_status));
     m_status.mode = ComLynxModeDisabled;
@@ -157,19 +149,14 @@ void ComLynxManager::PublishFrame(u64 local_start_cycle, u32 bit_cycles, u16 bit
     peer.heartbeat_us.store(GetClockMicroseconds(), std::memory_order_release);
 
     u32 index = peer.write_index.load(std::memory_order_relaxed);
-    Shared::Frame& frame = peer.frames[index % COMLYNX_SHARED_FRAME_COUNT];
-    u32 sequence = frame.sequence.load(std::memory_order_relaxed);
+    ComLynxSharedFrame& frame = peer.frames[index % COMLYNX_SHARED_FRAME_COUNT];
+    u64 start_cycle = ToBusCycle(local_start_cycle);
 
-    frame.sequence.store(sequence + 1, std::memory_order_release);
-    frame.generation = m_generation;
-    frame.start_cycle = ToBusCycle(local_start_cycle);
-    frame.bit_cycles = bit_cycles;
-    frame.bits = bits & 0x07FF;
-    frame.sequence.store(sequence + 2, std::memory_order_release);
+    comlynx_publish_shared_frame(frame, m_generation, start_cycle, bit_cycles, bits);
 
     peer.write_index.store(index + 1, std::memory_order_release);
 
-    u64 frame_end = frame.start_cycle + (u64)bit_cycles * COMLYNX_FRAME_BITS;
+    u64 frame_end = start_cycle + (u64)bit_cycles * COMLYNX_FRAME_BITS;
     u64 promise = peer.promise_cycle.load(std::memory_order_relaxed);
 
     if (frame_end > promise)
@@ -225,24 +212,69 @@ bool ComLynxManager::SampleLine(u64 local_cycle)
 
         for (u32 offset = 0; offset < count; offset++)
         {
-            Shared::Frame& source = peer.frames[(write_index - 1 - offset) % COMLYNX_SHARED_FRAME_COUNT];
+            ComLynxSharedFrame& source = peer.frames[(write_index - 1 - offset) % COMLYNX_SHARED_FRAME_COUNT];
 
-            u32 before = source.sequence.load(std::memory_order_acquire);
+            ComLynxLocalFrame frame;
 
-            if ((before & 1) != 0)
+            if (!comlynx_read_shared_frame(source, generation, frame))
                 continue;
 
-            ComLynxWireFrame frame;
+            if (cycle >= frame.start_cycle + (u64)frame.bit_cycles * COMLYNX_FRAME_BITS)
+                break;
 
-            u32 frame_generation = source.generation;
+            if (!comlynx_frame_level(frame, cycle))
+            {
+                level = false;
+                break;
+            }
+        }
+    }
 
-            frame.start_cycle = source.start_cycle;
-            frame.bit_cycles = source.bit_cycles;
-            frame.bits = source.bits;
+    m_status.line_samples++;
 
-            u32 after = source.sequence.load(std::memory_order_acquire);
+    if (!level)
+        m_status.low_samples++;
 
-            if (before != after || (after & 1) != 0 || frame_generation != generation)
+    return level;
+}
+
+bool ComLynxManager::SampleLineTurbo(u64 local_cycle)
+{
+    if (!EnsureAttached(local_cycle))
+        return true;
+
+    u64 cycle = ToBusCycle(local_cycle);
+    bool level = true;
+
+    for (int i = 0; i < COMLYNX_MAX_PEERS && level; i++)
+    {
+        if (i == m_slot)
+            continue;
+
+        Shared::Peer& peer = m_shared->peers[i];
+
+        if (peer.state.load(std::memory_order_acquire) != 1)
+            continue;
+
+        u64 break_from = peer.break_from.load(std::memory_order_acquire);
+
+        if (break_from != 0 && cycle >= break_from)
+        {
+            level = false;
+            break;
+        }
+
+        u32 generation = peer.generation.load(std::memory_order_acquire);
+        u32 write_index = peer.write_index.load(std::memory_order_acquire);
+        u32 count = MIN(write_index, (u32)COMLYNX_SHARED_FRAME_COUNT);
+
+        for (u32 offset = 0; offset < count; offset++)
+        {
+            ComLynxSharedFrame& source = peer.frames[(write_index - 1 - offset) % COMLYNX_SHARED_FRAME_COUNT];
+
+            ComLynxLocalFrame frame;
+
+            if (!comlynx_read_shared_frame(source, generation, frame))
                 continue;
 
             if (cycle >= frame.start_cycle + (u64)frame.bit_cycles * COMLYNX_FRAME_BITS)
@@ -325,7 +357,7 @@ void ComLynxManager::Synchronize(u64 local_cycle, u32 promise_cycles)
 
         local.heartbeat_us.store(now, std::memory_order_release);
 
-        if (now - progress_time >= COMLYNX_BARRIER_SPIN_US)
+        if (now - progress_time >= m_normal_barrier_stall_us)
             std::this_thread::sleep_for(std::chrono::microseconds(COMLYNX_BARRIER_SLEEP_US));
         else
             std::this_thread::yield();
@@ -347,6 +379,83 @@ void ComLynxManager::Synchronize(u64 local_cycle, u32 promise_cycles)
         if (wait >= 50000)
             m_status.barrier_wait_over_50ms++;
     }
+
+    m_last_sync_exit_us = now;
+}
+
+void ComLynxManager::SynchronizeTurbo(u64 local_cycle)
+{
+    if (!EnsureAttached(local_cycle))
+        return;
+
+    MaintainTurbo(local_cycle);
+
+    Shared::Peer& local = m_shared->peers[m_slot];
+    u64 cycle = ToBusCycle(local_cycle);
+    local.promise_cycle.store(cycle + COMLYNX_TURBO_PROMISE_CYCLES, std::memory_order_release);
+
+    u64 floor = ~0ULL;
+
+    for (int i = 0; i < COMLYNX_MAX_PEERS; i++)
+    {
+        Shared::Peer& peer = m_shared->peers[i];
+
+        if (peer.state.load(std::memory_order_acquire) == 1)
+            floor = MIN(floor, peer.promise_cycle.load(std::memory_order_acquire));
+    }
+
+    if (floor == ~0ULL || cycle <= floor)
+        return;
+
+    u64 wait_started = GetClockMicroseconds();
+    u64 progress_time = wait_started;
+    u64 previous_floor = floor;
+    m_status.barrier_waits++;
+
+    for (;;)
+    {
+        floor = ~0ULL;
+
+        for (int i = 0; i < COMLYNX_MAX_PEERS; i++)
+        {
+            Shared::Peer& peer = m_shared->peers[i];
+
+            if (peer.state.load(std::memory_order_acquire) == 1)
+                floor = MIN(floor, peer.promise_cycle.load(std::memory_order_acquire));
+        }
+
+        if (floor == ~0ULL || cycle <= floor)
+            break;
+
+        u64 now = GetClockMicroseconds();
+
+        if (floor != previous_floor)
+        {
+            previous_floor = floor;
+            progress_time = now;
+        }
+
+        ReapStalePeers(now);
+        local.heartbeat_us.store(now, std::memory_order_release);
+
+        if (now - progress_time >= COMLYNX_BARRIER_SPIN_US)
+            std::this_thread::sleep_for(std::chrono::microseconds(COMLYNX_BARRIER_SLEEP_US));
+        else
+            std::this_thread::yield();
+    }
+
+    u64 now = GetClockMicroseconds();
+    u64 wait = now - wait_started;
+
+    m_status.barrier_wait_us += wait;
+    m_status.barrier_wait_max_us = MAX(m_status.barrier_wait_max_us, wait);
+
+    if (wait >= 1000)
+        m_status.barrier_wait_over_1ms++;
+    if (wait >= 10000)
+        m_status.barrier_wait_over_10ms++;
+    if (wait >= 50000)
+        m_status.barrier_wait_over_50ms++;
 
     m_last_sync_exit_us = now;
 }
@@ -398,6 +507,11 @@ void ComLynxManager::ResetMetrics()
     m_status.peer_detach_max_age_us = 0;
     m_status.reattachments = 0;
     m_last_sync_exit_us = GetClockMicroseconds();
+}
+
+void ComLynxManager::SetNormalBarrierStallUs(u32 stall_us)
+{
+    m_normal_barrier_stall_us = stall_us;
 }
 
 bool ComLynxManager::Map(u8 session)
@@ -511,6 +625,14 @@ bool ComLynxManager::Map(u8 session)
             return false;
         }
     }
+
+    if (!comlynx_shared_frame_atomics_lock_free(m_shared->peers[0].frames[0]))
+    {
+        Unmap();
+        SetFault("ComLynx shared frame atomics are not lock-free");
+        return false;
+    }
+
     return true;
 }
 
@@ -563,6 +685,7 @@ bool ComLynxManager::ClaimSlot(u64 local_cycle, bool reattach)
         m_generation = peer.generation.fetch_add(1, std::memory_order_acq_rel) + 1;
         m_local_anchor = local_cycle;
         m_bus_anchor = bus_anchor;
+        m_turbo_next_maintenance_cycle = local_cycle + COMLYNX_TURBO_MAINTENANCE_CYCLES;
 
         peer.write_index.store(0, std::memory_order_relaxed);
         peer.break_from.store(0, std::memory_order_relaxed);
@@ -595,6 +718,31 @@ bool ComLynxManager::EnsureAttached(u64 local_cycle)
     return ClaimSlot(local_cycle, true);
 }
 
+void ComLynxManager::MaintainTurbo(u64 local_cycle)
+{
+    if (local_cycle < m_turbo_next_maintenance_cycle)
+        return;
+
+    u64 now = GetClockMicroseconds();
+
+    if (m_last_sync_exit_us != 0)
+    {
+        u64 gap = now - m_last_sync_exit_us;
+        m_status.sync_gap_max_us = MAX(m_status.sync_gap_max_us, gap);
+
+        if (gap >= 50000)
+            m_status.sync_gap_over_50ms++;
+    }
+
+    ReapStalePeers(now);
+
+    if (m_slot >= 0)
+        m_shared->peers[m_slot].heartbeat_us.store(now, std::memory_order_release);
+
+    m_turbo_next_maintenance_cycle = local_cycle + COMLYNX_TURBO_MAINTENANCE_CYCLES;
+    m_last_sync_exit_us = now;
+}
+
 void ComLynxManager::ReapStalePeers(u64 now_us, bool preserve_idle)
 {
     for (int i = 0; i < COMLYNX_MAX_PEERS; i++)
@@ -605,6 +753,7 @@ void ComLynxManager::ReapStalePeers(u64 now_us, bool preserve_idle)
         Shared::Peer& peer = m_shared->peers[i];
 
         u64 heartbeat = peer.heartbeat_us.load(std::memory_order_acquire);
+        u32 generation = peer.generation.load(std::memory_order_acquire);
         u64 age = comlynx_heartbeat_age(now_us, heartbeat);
 
         if (peer.state.load(std::memory_order_acquire) != 1 || age <= COMLYNX_DETACH_US)
@@ -612,6 +761,18 @@ void ComLynxManager::ReapStalePeers(u64 now_us, bool preserve_idle)
 
         if (preserve_idle && peer.write_index.load(std::memory_order_acquire) == 0)
             continue;
+
+        if (peer.state.load(std::memory_order_acquire) != 1)
+            continue;
+
+        u32 current_generation = peer.generation.load(std::memory_order_acquire);
+        u64 current_heartbeat = peer.heartbeat_us.load(std::memory_order_acquire);
+
+        if (!comlynx_lease_is_unchanged_and_stale(now_us, heartbeat, generation,
+            current_heartbeat, current_generation))
+        {
+            continue;
+        }
 
         u32 expected = 1;
 

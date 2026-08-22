@@ -18,20 +18,27 @@
  */
 
 #include "trace_logger.h"
-#include <string.h>
+#include <new>
 
-TraceLogger::TraceLogger()
+TraceLogger::TraceLogger(const u64* total_cycles)
 {
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
-    m_buffer = new GLYNX_Trace_Entry[TRACE_BUFFER_SIZE];
-    memset(m_buffer, 0, sizeof(GLYNX_Trace_Entry) * TRACE_BUFFER_SIZE);
+    m_buffer = new(std::nothrow) GLYNX_Trace_Entry[TRACE_BUFFER_SIZE];
 #else
     m_buffer = NULL;
 #endif
+    m_capacity = TRACE_BUFFER_SIZE;
     m_position = 0;
     m_count = 0;
     m_enabled_flags = 0;
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    UpdateEnabled();
+#endif
+    for (int i = 0; i < TRACE_TYPE_COUNT; i++)
+        m_event_filters[i] = 0xFFFFFFFFU;
     m_total_logged = 0;
+    m_sequence = 0;
+    m_total_cycles = total_cycles;
 }
 
 TraceLogger::~TraceLogger()
@@ -44,20 +51,66 @@ void TraceLogger::Reset()
     m_position = 0;
     m_count = 0;
     m_total_logged = 0;
+}
+
+bool TraceLogger::SetCapacity(u32 capacity)
+{
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
-    if (m_buffer)
-        memset(m_buffer, 0, sizeof(GLYNX_Trace_Entry) * TRACE_BUFFER_SIZE);
+    if (capacity == 0)
+        return false;
+    if (capacity == m_capacity && m_buffer)
+        return true;
+
+    GLYNX_Trace_Entry* buffer = new(std::nothrow) GLYNX_Trace_Entry[capacity];
+    if (!buffer)
+        return false;
+
+    SafeDeleteArray(m_buffer);
+    m_buffer = buffer;
+    m_capacity = capacity;
+    UpdateEnabled();
+    Reset();
+    return true;
+#else
+    if (capacity == 0)
+        return false;
+    m_capacity = capacity;
+    Reset();
+    return true;
 #endif
 }
 
 void TraceLogger::SetEnabledFlags(u32 flags)
 {
     m_enabled_flags = flags;
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    UpdateEnabled();
+#endif
+}
+
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+void TraceLogger::UpdateEnabled()
+{
+    m_enabled = IsValidPointer(m_buffer) && m_enabled_flags != 0;
+}
+#endif
+
+void TraceLogger::SetEventFilter(GLYNX_Trace_Type type, u32 filter)
+{
+    if (type < TRACE_TYPE_COUNT)
+        m_event_filters[type] = filter;
 }
 
 u32 TraceLogger::GetEnabledFlags() const
 {
     return m_enabled_flags;
+}
+
+u32 TraceLogger::GetEventFilter(GLYNX_Trace_Type type) const
+{
+    if (type < TRACE_TYPE_COUNT)
+        return m_event_filters[type];
+    return 0;
 }
 
 const GLYNX_Trace_Entry* TraceLogger::GetBuffer() const
@@ -70,6 +123,11 @@ u32 TraceLogger::GetCount() const
     return m_count;
 }
 
+u32 TraceLogger::GetCapacity() const
+{
+    return m_capacity;
+}
+
 u32 TraceLogger::GetPosition() const
 {
     return m_position;
@@ -80,19 +138,20 @@ u64 TraceLogger::GetTotalLogged() const
     return m_total_logged;
 }
 
+u64 TraceLogger::GetSequence() const
+{
+    return m_sequence;
+}
+
 const GLYNX_Trace_Entry& TraceLogger::GetEntry(u32 index) const
 {
     static const GLYNX_Trace_Entry k_empty = {};
-    if (!m_buffer || m_count == 0)
+    if (!m_buffer || index >= m_count)
         return k_empty;
     u32 actual;
-    if (m_count < TRACE_BUFFER_SIZE)
-    {
-        if (index >= m_count)
-            return k_empty;
+    if (m_count < m_capacity)
         actual = index;
-    }
     else
-        actual = (m_position + index) % TRACE_BUFFER_SIZE;
+        actual = (m_position + index) % m_capacity;
     return m_buffer[actual];
 }

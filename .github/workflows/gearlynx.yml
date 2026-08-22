@@ -229,6 +229,8 @@ jobs:
         fetch-depth: 0
     - name: Setup msbuild
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+      with:
+        msbuild-architecture: x64
     - name: Download SDL3 development libraries
       shell: bash
       env:
@@ -245,7 +247,7 @@ jobs:
       run: |
         echo "BUILD_NUMBER=$(git describe --abbrev=7 --dirty --always --tags)" >> $GITHUB_ENV
     - name: msbuild
-      run: msbuild ${{ env.NAME_UPPER }}.sln /t:Clean,Build /p:EmulatorBuild="${{ env.BUILD_NUMBER }}" /p:Configuration=Release /p:Platform=${{ matrix.architecture }}
+      run: msbuild ${{ env.NAME_UPPER }}.sln /t:Clean,Build /p:EmulatorBuild="${{ env.BUILD_NUMBER }}" /p:Configuration=Release /p:Platform=${{ matrix.architecture }} /p:PreferredToolArchitecture=x64
       working-directory: platforms/windows
     - name: Prepare artifact directory
       run: |
@@ -278,7 +280,7 @@ jobs:
         echo "BUILD_NUMBER=$(git describe --abbrev=7 --dirty --always --tags)" >> $GITHUB_ENV
     - name: Run FreeBSD and gmake
       id: test
-      uses: vmactions/freebsd-vm@77ed28d336d03fe19a3f4f7266c1d2c4714dd79d # v1
+      uses: vmactions/freebsd-vm@83b151f58c6047089f4c80eb5ba2039d158ce093 # v1
       with:
         usesh: true
         prepare: pkg install -y git gmake pkgconf sdl3 lang/gcc

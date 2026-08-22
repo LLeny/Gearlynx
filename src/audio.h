@@ -52,14 +52,14 @@ public:
     void SaveState(std::ostream& stream);
     void LoadState(std::istream& stream, int version);
     void Serialize(StateSerializer& s, int version);
-    bool StartVgmRecording(const char* file_path, int clock_rate);
+    bool StartVgmRecording(const char* file_path, int clock_rate, const VgmMetadata& metadata);
     void StopVgmRecording();
     bool IsVgmRecording() const;
     VgmRecorder* GetVgmRecorder();
 
 private:
     Mikey* m_mikey;
-    u32 m_cycles;
+    u32 m_sample_phase;
     bool m_mute;
     s32 m_lpf_left;
     s32 m_lpf_right;

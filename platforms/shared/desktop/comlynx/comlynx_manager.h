@@ -13,10 +13,7 @@
 
 #include "comlynx.h"
 
-inline u64 comlynx_heartbeat_age(u64 now, u64 heartbeat)
-{
-    return heartbeat <= now ? now - heartbeat : 0;
-}
+#define COMLYNX_DETACH_US 500000
 
 enum ComLynxMode
 {
@@ -62,11 +59,14 @@ public:
     void SetBreak(bool asserted, u64 local_cycle);
     bool SampleLine(u64 local_cycle);
     void Synchronize(u64 local_cycle, u32 promise_cycles);
+    bool SampleLineTurbo(u64 local_cycle);
+    void SynchronizeTurbo(u64 local_cycle);
     bool IsActive() const;
     bool IsCableConnected() const;
     bool IsPacingPeer() const;
     ComLynxStatus GetStatus();
     void ResetMetrics();
+    void SetNormalBarrierStallUs(u32 stall_us);
 
 private:
     struct Shared;
@@ -75,6 +75,7 @@ private:
     void Unmap();
     bool ClaimSlot(u64 local_cycle, bool reattach);
     bool EnsureAttached(u64 local_cycle);
+    void MaintainTurbo(u64 local_cycle);
     void ReapStalePeers(u64 now_us, bool preserve_idle = false);
     u64 ToBusCycle(u64 local_cycle) const;
     u64 GetClockMicroseconds() const;
@@ -92,6 +93,32 @@ private:
     u64 m_bus_anchor;
     u64 m_last_sync_exit_us;
     ComLynxStatus m_status;
+    u64 m_turbo_next_maintenance_cycle;
+    u32 m_normal_barrier_stall_us;
 };
+
+inline u32 comlynx_normal_barrier_stall_us()
+{
+#if defined(_WIN32)
+    return 5000;
+#elif defined(__APPLE__)
+    return 100;
+#else
+    return 250;
+#endif
+}
+
+inline u64 comlynx_heartbeat_age(u64 now, u64 heartbeat)
+{
+    return heartbeat <= now ? now - heartbeat : 0;
+}
+
+inline bool comlynx_lease_is_unchanged_and_stale(u64 now, u64 observed_heartbeat,
+    u32 observed_generation, u64 current_heartbeat, u32 current_generation)
+{
+    return current_heartbeat == observed_heartbeat &&
+        current_generation == observed_generation &&
+        comlynx_heartbeat_age(now, current_heartbeat) > COMLYNX_DETACH_US;
+}
 
 #endif /* COMLYNX_MANAGER_H */

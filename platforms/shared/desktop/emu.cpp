@@ -30,6 +30,7 @@
 #include "rewind.h"
 #include "runahead.h"
 #include "events.h"
+#include "gui_debug_trace_logger.h"
 #include "mcp/mcp_manager.h"
 #include "comlynx/comlynx_manager.h"
 #include "vscode/debug_monitor_server.h"
@@ -89,6 +90,8 @@ static void comlynx_publish_callback(u64 start_cycle, u32 bit_cycles, u16 bits, 
 static bool comlynx_sample_callback(u64 cycle, void* user_data);
 static void comlynx_break_callback(bool asserted, u64 cycle, void* user_data);
 static void comlynx_sync_callback(u64 cycles, u32 promise_cycles, void* user_data);
+static bool comlynx_turbo_sample_callback(u64 cycle, void* user_data);
+static void comlynx_turbo_sync_callback(u64 cycles, void* user_data);
 
 bool emu_init(void)
 {
@@ -119,9 +122,12 @@ bool emu_init(void)
     core->Init();
 
     comlynx_manager = new ComLynxManager();
+    comlynx_manager->SetNormalBarrierStallUs((u32)config_emulator.comlynx_stall_us);
     comlynx_cable_applied = false;
     core->SetComLynxCallbacks(comlynx_publish_callback, comlynx_sample_callback,
         comlynx_break_callback, comlynx_sync_callback, comlynx_manager);
+    core->SetComLynxTurboCallbacks(comlynx_turbo_sample_callback,
+        comlynx_turbo_sync_callback, comlynx_manager);
 
     sound_queue_init();
 
@@ -178,6 +184,7 @@ void emu_destroy(void)
 
 bool emu_load_rom(const char* file_path)
 {
+    gui_debug_trace_logger_reset();
     emu_debug_command = Debug_Command_None;
     reset_buffers();
     reset_debug();
@@ -210,6 +217,8 @@ void emu_load_rom_async(const char* file_path)
 {
     if (loading_state.load() != Loading_State_None)
         return;
+
+    gui_debug_trace_logger_reset();
 
     emu_debug_command = Debug_Command_None;
     reset_buffers();
@@ -561,6 +570,7 @@ GLYNX_Bios_State emu_load_bios(const char* file_path)
 
 void emu_reset(void)
 {
+    gui_debug_trace_logger_reset();
     emu_debug_command = Debug_Command_None;
     emu_debug_step_frames_pending = 0;
     emu_debug_pc_changed = true;
@@ -727,6 +737,7 @@ void emu_load_ram(const char* file_path)
 {
     if (!emu_is_empty())
     {
+        gui_debug_trace_logger_reset();
         emu_comlynx_stop();
         save_ram();
         core->ResetROM(false);
@@ -1981,8 +1992,13 @@ void emu_start_vgm_recording(const char* file_path)
 
     // Atari Lynx Mikey chip clock rate is 16 MHz
     const int clock_rate = 16000000;
+    Media* media = core->GetMedia();
+    VgmMetadata metadata;
+    metadata.game_name = media->IsInGameDatabase() ? media->GetGameDatabaseName() : media->GetFileName();
+    metadata.system_name = "Atari Lynx";
+    metadata.comment = "Created with " GLYNX_TITLE " " GLYNX_VERSION;
 
-    if (core->GetAudio()->StartVgmRecording(file_path, clock_rate))
+    if (core->GetAudio()->StartVgmRecording(file_path, clock_rate, metadata))
     {
         Log("VGM recording started: %s", file_path);
     }
@@ -2028,6 +2044,16 @@ bool emu_mcp_is_running(void)
 int emu_mcp_get_transport_mode(void)
 {
     return mcp_manager ? mcp_manager->GetTransportMode() : -1;
+}
+
+const char* emu_mcp_get_http_address(void)
+{
+    return mcp_manager ? mcp_manager->GetTcpAddress() : "";
+}
+
+int emu_mcp_get_http_port(void)
+{
+    return mcp_manager ? mcp_manager->GetTcpPort() : 0;
 }
 
 void emu_mcp_pump_commands(void)
@@ -2106,6 +2132,12 @@ void emu_comlynx_reset_metrics(void)
         comlynx_manager->ResetMetrics();
 }
 
+void emu_comlynx_set_normal_barrier_stall_us(u32 stall_us)
+{
+    if (comlynx_manager)
+        comlynx_manager->SetNormalBarrierStallUs(stall_us);
+}
+
 static void comlynx_publish_callback(u64 start_cycle, u32 bit_cycles, u16 bits, void* user_data)
 {
     ComLynxManager* manager = (ComLynxManager*)user_data;
@@ -2134,6 +2166,20 @@ static void comlynx_sync_callback(u64 cycles, u32 promise_cycles, void* user_dat
 
     if (manager)
         manager->Synchronize(cycles, promise_cycles);
+}
+
+static bool comlynx_turbo_sample_callback(u64 cycle, void* user_data)
+{
+    ComLynxManager* manager = (ComLynxManager*)user_data;
+    return manager ? manager->SampleLineTurbo(cycle) : true;
+}
+
+static void comlynx_turbo_sync_callback(u64 cycles, void* user_data)
+{
+    ComLynxManager* manager = (ComLynxManager*)user_data;
+
+    if (manager)
+        manager->SynchronizeTurbo(cycles);
 }
 
 void emu_debug_monitor_start(int port)

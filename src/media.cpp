@@ -45,6 +45,7 @@ Media::Media()
     InitPointer(m_eeprom_instance);
     InitPointer(m_game_drive_instance);
     InitPointer(m_el_cheapo_sd_instance);
+    InitPointer(m_trace_logger);
     InitPointer(m_decrypt_buffer_a);
     InitPointer(m_decrypt_buffer_b);
     InitPointer(m_decrypt_buffer_tmp);
@@ -77,6 +78,7 @@ Media::~Media()
 void Media::Init()
 {
     m_eeprom_instance = new EEPROM();
+    m_eeprom_instance->SetTraceLogger(m_trace_logger);
     m_game_drive_instance = new GameDrive();
     m_el_cheapo_sd_instance = new ElCheapoSD();
     m_nvram = new u8[NVRAM_SIZE];
@@ -86,6 +88,13 @@ void Media::Init()
     m_decrypt_buffer_tmp = new u8[EPYX_DECRYPT_BLOCK_SIZE];
     m_decrypt_buffer_sub = new u8[EPYX_DECRYPT_BLOCK_SIZE];
     HardReset();
+}
+
+void Media::SetTraceLogger(TraceLogger* trace_logger)
+{
+    m_trace_logger = trace_logger;
+    if (IsValidPointer(m_eeprom_instance))
+        m_eeprom_instance->SetTraceLogger(trace_logger);
 }
 
 void Media::Reset()
@@ -110,6 +119,7 @@ void Media::HardReset()
     m_rom_size = 0;
     m_ready = false;
     m_is_in_game_database = false;
+    m_game_database_name = NULL;
     m_file_path[0] = 0;
     m_file_directory[0] = 0;
     m_file_name[0] = 0;
@@ -643,7 +653,7 @@ bool Media::LoadFromZipFile(const u8* buffer, int size)
         string extension = fn.substr(fn.find_last_of(".") + 1);
         transform(extension.begin(), extension.end(), extension.begin(), (int(*)(int)) tolower);
 
-        if ((extension == "lnx") || (extension == "lyx") || (extension == "o"))
+        if ((extension == "lnx") || (extension == "lyx") || (extension == "o") || (extension == "bin"))
         {
             void *p;
             size_t uncomp_size;
@@ -673,6 +683,7 @@ void Media::GatherInfoFromDB()
 {
     int i = 0;
     m_is_in_game_database = false;
+    m_game_database_name = NULL;
 
     while(!m_is_in_game_database && (k_game_database[i].title != 0))
     {
@@ -681,6 +692,7 @@ void Media::GatherInfoFromDB()
         if (db_crc == m_crc)
         {
             m_is_in_game_database = true;
+            m_game_database_name = k_game_database[i].title;
             Log("ROM found in database: %s. CRC: %08X", k_game_database[i].title, m_crc);
 
             if (m_is_lnx2)
@@ -1205,7 +1217,7 @@ void Media::ApplyCartridgeHardwareConfiguration()
     }
     else
     {
-        m_game_drive_instance->Reset(false);
+        m_game_drive_instance->Reset(true);
         if (m_active_cartridge_hardware == GLYNX_CARTRIDGE_HARDWARE_EL_CHEAPO_SD)
         {
             m_el_cheapo_sd_instance->Configure(true, m_file_directory,
@@ -1292,7 +1304,7 @@ void Media::LoadState(std::istream& stream, int version)
     }
     if (m_el_cheapo_sd_instance->IsAvailable())
     {
-        if (version == 18)
+        if (version >= 18)
             m_el_cheapo_sd_instance->LoadState(stream);
         else
             m_el_cheapo_sd_instance->Reset(false);

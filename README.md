@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/drhelius/Gearlynx)](https://github.com/drhelius/Gearlynx/blob/main/LICENSE)
 [![Twitter Follow](https://img.shields.io/twitter/follow/drhelius)](https://x.com/drhelius)
 
-Gearlynx is a very accurate, cross-platform Atari Lynx emulator written in C++ that runs on Windows, macOS, Linux, BSD and RetroArch, with an embedded MCP server for debugging and tooling.
+Gearlynx is a very accurate, cross-platform Atari Lynx emulator written in C++ that runs on Windows, macOS, Linux, BSD and RetroArch, with an embedded MCP server for AI debugging and development.
 
 This is an open source project with its ongoing development made possible thanks to the support by these awesome [backers](backers.md). If you find it useful, please consider [sponsoring](https://github.com/sponsors/drhelius).
 
@@ -30,11 +30,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>Desktop x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-windows-x64.zip">Gearlynx-1.2.25-desktop-windows-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-windows-x64.zip">Gearlynx-1.2.27-desktop-windows-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-windows-arm64.zip">Gearlynx-1.2.25-desktop-windows-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-windows-arm64.zip">Gearlynx-1.2.27-desktop-windows-arm64.zip</a></td>
     </tr>
     <tr>
       <td rowspan="3"><strong>macOS</strong></td>
@@ -43,11 +43,11 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Apple Silicon</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-macos-arm64.zip">Gearlynx-1.2.25-desktop-macos-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-macos-arm64.zip">Gearlynx-1.2.27-desktop-macos-arm64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Intel</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-macos-intel.zip">Gearlynx-1.2.25-desktop-macos-intel.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-macos-intel.zip">Gearlynx-1.2.27-desktop-macos-intel.zip</a></td>
     </tr>
     <tr>
       <td rowspan="5"><strong>Linux</strong></td>
@@ -60,15 +60,15 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.25-desktop-ubuntu24.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-ubuntu24.04-x64.zip">Gearlynx-1.2.27-desktop-ubuntu24.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 22.04 x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.25-desktop-ubuntu22.04-x64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-ubuntu22.04-x64.zip">Gearlynx-1.2.27-desktop-ubuntu22.04-x64.zip</a></td>
     </tr>
     <tr>
       <td>Desktop Ubuntu 24.04 ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.25/Gearlynx-1.2.25-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.25-desktop-ubuntu24.04-arm64.zip</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.27/Gearlynx-1.2.27-desktop-ubuntu24.04-arm64.zip">Gearlynx-1.2.27-desktop-ubuntu24.04-arm64.zip</a></td>
     </tr>
     <tr>
       <td><strong>MCPB</strong></td>
@@ -97,7 +97,7 @@ Don't hesitate to report bugs or ask for new features by [opening an issue](http
 
 - Very accurate emulation supporting the entire commercial Atari Lynx catalog and most homebrew and demos.
 - User selectable Lynx I or Lynx II emulation.
-- Compressed and homebrew ROM support (lnx, lyx, o, and zip).
+- Compressed and homebrew ROM support (lnx, lyx, o, bin, and zip).
 - Save states with preview and rewind support.
 - Run-ahead support to reduce input latency.
 - Very accurate audio emulation with configurable low-pass filter (mimics original Lynx audio hardware).
