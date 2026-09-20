@@ -68,6 +68,7 @@ static std::thread loading_thread;
 static bool loading_thread_active = false;
 static bool loading_result;
 static char loading_file_path[4096];
+static bool loading_softpatching;
 
 static void save_ram(void);
 static void load_ram(void);
@@ -192,7 +193,7 @@ bool emu_load_rom(const char* file_path)
 
     save_ram();
 
-    if (!core->LoadROM(file_path))
+    if (!core->LoadROM(file_path, config_emulator.softpatching))
         return false;
 
     load_ram();
@@ -209,7 +210,7 @@ bool emu_load_rom(const char* file_path)
 
 static void load_rom_thread_func(void)
 {
-    loading_result = core->LoadROM(loading_file_path);
+    loading_result = core->LoadROM(loading_file_path, loading_softpatching);
     loading_state.store(Loading_State_Finished);
 }
 
@@ -230,6 +231,7 @@ void emu_load_rom_async(const char* file_path)
     strncpy(loading_file_path, file_path, sizeof(loading_file_path) - 1);
     loading_file_path[sizeof(loading_file_path) - 1] = '\0';
     loading_result = false;
+    loading_softpatching = config_emulator.softpatching;
     loading_state.store(Loading_State_Loading);
     if (loading_thread_active)
         loading_thread.join();
@@ -555,7 +557,7 @@ bool emu_is_debug_idle(void)
 
 bool emu_is_empty(void)
 {
-    return !core->GetMedia()->IsReady();
+    return !IsValidPointer(core) || !core->GetMedia()->IsReady();
 }
 
 bool emu_is_bios_loaded(void)
@@ -590,6 +592,9 @@ void emu_reset(void)
 void emu_force_rotation(int rotation)
 {
     core->GetMedia()->ForceRotation((GLYNX_Rotation)rotation);
+    core->GetInput()->Reset();
+    input_raw_directions = 0;
+    input_active_directions = 0;
 }
 
 void emu_force_console_type(int console_type)
@@ -819,6 +824,17 @@ void update_savestates_data(void)
 void emu_get_runtime(GLYNX_Runtime_Info& runtime)
 {
     core->GetRuntimeInfo(runtime);
+}
+
+double emu_get_frame_rate(void)
+{
+    if (!IsValidPointer(core))
+        return 60.0;
+
+    GLYNX_Runtime_Info runtime;
+    emu_get_runtime(runtime);
+
+    return runtime.frame_time > 0.0f ? 1000.0 / runtime.frame_time : 60.0;
 }
 
 void emu_get_info(char* info, int buffer_size)

@@ -558,6 +558,9 @@ json DebugAdapter::GetMediaInfo()
     info["crc"] = crc_ss.str();
 
     info["rom_size"] = media->GetROMSize();
+    info["softpatch_applied"] = media->IsSoftpatchApplied();
+    if (media->IsSoftpatchApplied())
+        info["softpatch_path"] = media->GetSoftpatchPath();
 
     // Media type
     Media::GLYNX_Media_Type type = media->GetType();
@@ -1814,6 +1817,9 @@ json DebugAdapter::FinishLoadMedia(const std::string& file_path)
     result["success"] = true;
     result["file_path"] = file_path;
     result["rom_name"] = m_core->GetMedia()->GetFileName();
+    result["softpatch_applied"] = m_core->GetMedia()->IsSoftpatchApplied();
+    if (m_core->GetMedia()->IsSoftpatchApplied())
+        result["softpatch_path"] = m_core->GetMedia()->GetSoftpatchPath();
 
     Media::GLYNX_Media_Type type = m_core->GetMedia()->GetType();
     switch (type)
@@ -2926,7 +2932,7 @@ json DebugAdapter::MemorySearch(int area, const std::string& op, const std::stri
     return result;
 }
 
-json DebugAdapter::MemoryFindBytes(int area, const std::string& hex_bytes)
+json DebugAdapter::MemoryFind(int area, const std::string& value, bool text, bool case_sensitive)
 {
     json result;
 
@@ -2942,14 +2948,23 @@ json DebugAdapter::MemoryFindBytes(int area, const std::string& hex_bytes)
         return result;
     }
 
-    if (hex_bytes.empty())
+    if (value.empty())
     {
-        result["error"] = "Empty hex byte string";
+        result["error"] = text ? "text is empty" : "hex_bytes is empty";
         return result;
     }
 
     int addresses[100];
-    int count = gui_debug_memory_find_bytes(area, hex_bytes.c_str(), addresses, 100);
+    int count = gui_debug_memory_find(area, value.c_str(), text, case_sensitive, addresses, 100);
+
+    if (count < 0)
+    {
+        if (text)
+            result["error"] = "text must not exceed 512 bytes";
+        else
+            result["error"] = "hex_bytes must contain valid hex byte pairs";
+        return result;
+    }
 
     result["area"] = area;
     result["count"] = count;
