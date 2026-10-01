@@ -570,7 +570,12 @@ GLYNX_Bios_State emu_load_bios(const char* file_path)
     return core->LoadBios(file_path);
 }
 
-void emu_reset(void)
+void emu_save_persistent_data(void)
+{
+    save_ram();
+}
+
+void emu_reset(bool save_persistent_data)
 {
     gui_debug_trace_logger_reset();
     emu_debug_command = Debug_Command_None;
@@ -582,7 +587,8 @@ void emu_reset(void)
     reset_rewind_timing();
     emu_audio_reset();
 
-    save_ram();
+    if (save_persistent_data)
+        emu_save_persistent_data();
     core->ResetROM(false);
     load_ram();
 
@@ -769,6 +775,7 @@ void emu_load_state_slot(int index)
         const char* dir = get_configurated_dir(config_emulator.savestates_dir_option, config_emulator.savestates_path.c_str());
         if (core->LoadState(dir, index))
         {
+            emu_debug_state_restored();
             events_sync_input();
             rewind_reset();
         }
@@ -788,6 +795,7 @@ void emu_load_state_file(const char* file_path)
         emu_comlynx_stop();
         if (core->LoadState(file_path))
         {
+            emu_debug_state_restored();
             events_sync_input();
             rewind_reset();
         }
@@ -798,14 +806,20 @@ void update_savestates_data(void)
 {
     emu_savestates_generation++;
 
+    for (int i = 0; i < 5; i++)
+    {
+        emu_savestates[i].rom_name[0] = 0;
+        SafeDeleteArray(emu_savestates_screenshots[i].data);
+        emu_savestates_screenshots[i].width = 0;
+        emu_savestates_screenshots[i].height = 0;
+        emu_savestates_screenshots[i].size = 0;
+    }
+
     if (emu_is_empty())
         return;
 
     for (int i = 0; i < 5; i++)
     {
-        emu_savestates[i].rom_name[0] = 0;
-        SafeDeleteArray(emu_savestates_screenshots[i].data);
-
         const char* dir = get_configurated_dir(config_emulator.savestates_dir_option, config_emulator.savestates_path.c_str());
 
         if (!core->GetSaveStateHeader(i + 1, dir, &emu_savestates[i]))
@@ -932,6 +946,14 @@ void emu_get_info(char* info, int buffer_size)
 GearlynxCore* emu_get_core(void)
 {
     return core;
+}
+
+void emu_debug_state_restored(void)
+{
+    emu_get_core()->GetM6502()->ResetDebuggerExecutionState();
+    emu_debug_command = Debug_Command_None;
+    emu_debug_step_frames_pending = 0;
+    emu_debug_pc_changed = true;
 }
 
 void emu_debug_step_over(void)

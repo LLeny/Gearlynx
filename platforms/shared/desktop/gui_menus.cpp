@@ -312,7 +312,7 @@ static void menu_gearlynx(void)
 
         ImGui::Separator();
 
-        if (ImGui::MenuItem("Load Default Settings"))
+        if (ImGui::MenuItem("Load Default Settings", NULL, false, !gui_is_rom_loading() && !emu_is_rom_loading()))
         {
             open_load_defaults = true;
         }
@@ -990,8 +990,9 @@ static void menu_input(void)
 
             if (ImGui::BeginMenu("Directional Controls"))
             {
-                ImGui::PushItemWidth(150.0f);
-                ImGui::Combo("##directional", &config_input.gamepad_directional, "D-pad\0Left Analog Stick\0\0");
+                ImGui::PushItemWidth(200.0f);
+                ImGui::Combo("##directional", &config_input.gamepad_directional,
+                    "D-pad\0Left Analog Stick\0D-pad + Left Analog Stick\0\0");
                 ImGui::PopItemWidth();
                 ImGui::EndMenu();
             }
