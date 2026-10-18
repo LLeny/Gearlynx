@@ -45,6 +45,15 @@ static const char* k_sprite_type_names[] =
     "SHADOW"
 };
 
+static const char* k_scb_status_names[] =
+{
+    "DRAWN",
+    "SKIP",
+    "OFFSCREEN",
+    "NO PIXELS",
+    "INVALID"
+};
+
 void gui_debug_window_scb_viewer(void)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
@@ -165,28 +174,16 @@ void gui_debug_window_scb_viewer(void)
         int w = emu_debug_sprite_widths[s];
         int h = emu_debug_sprite_heights[s];
 
-        if (entry.skipped)
+        if (entry.status != Debug_SCB_Status_Drawn || w <= 0 || h <= 0)
         {
             ImGui::PushID(s);
-            if (ImGui::Selectable("##skip", selected_sprite == s, 0, ImVec2(0, ImGui::GetTextLineHeight())))
+            float status_h = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetTextLineHeight();
+            if (ImGui::Selectable("##status", selected_sprite == s, 0, ImVec2(0, status_h)))
                 selected_sprite = (selected_sprite == s) ? -1 : s;
             if (ImGui::IsItemHovered())
                 hovered_sprite = s;
             ImGui::SameLine();
-            ImGui::TextColored(gray, "#%02d $%04X (SKIP)", s, entry.scb_address);
-            ImGui::PopID();
-            continue;
-        }
-
-        if (w <= 0 || h <= 0)
-        {
-            ImGui::PushID(s);
-            if (ImGui::Selectable("##empty", selected_sprite == s, 0, ImVec2(0, ImGui::GetTextLineHeight())))
-                selected_sprite = (selected_sprite == s) ? -1 : s;
-            if (ImGui::IsItemHovered())
-                hovered_sprite = s;
-            ImGui::SameLine();
-            ImGui::TextColored(gray, "#%02d $%04X (EMPTY)", s, entry.scb_address);
+            ImGui::TextColored(gray, "#%02d $%04X\n(%s)", s, entry.scb_address, k_scb_status_names[entry.status]);
             ImGui::PopID();
             continue;
         }
@@ -347,6 +344,9 @@ void gui_debug_window_scb_viewer(void)
 
                         ImGui::EndTable();
                     }
+
+                    if (entry.status != Debug_SCB_Status_Drawn)
+                        ImGui::TextColored(red, " %s", k_scb_status_names[entry.status]);
                 }
 
                 ImGui::PopFont();
@@ -396,7 +396,7 @@ void gui_debug_window_scb_viewer(void)
                     if (x0 < x1 && y0 < y1)
                     {
                         float t = (float)(0.5 + 0.5 * sin(ImGui::GetTime() * 4.0));
-                        ImVec4 pulse_color = gui_debug_lerp_color(red, white, t);
+                        ImVec4 pulse_color = gui_lerp_color(red, white, t);
                         dl->AddRect(
                             ImVec2(origin.x + x0, origin.y + y0),
                             ImVec2(origin.x + x1, origin.y + y1),

@@ -29,12 +29,16 @@
 #include "../gui_debug_memeditor.h"
 #include "../gui_debug_rewind.h"
 #include "../gui_debug_trace_logger.h"
+#include "../gui_debug_profiler.h"
 #include "../trace_logger_formatter.h"
 #include "../config.h"
 #include "../events.h"
 #include "../rewind.h"
+#include "../video_recorder.h"
 #include "mikey_defines.h"
 #include <cstring>
+#include <cctype>
+#include <cmath>
 #include <sstream>
 #include <iomanip>
 #include <vector>
@@ -52,6 +56,23 @@ static const char* cart_bank_type_name(GLYNX_Cartridge_Bank_Type type)
             return "RAM+SAVE";
         default:
             return "UNUSED";
+    }
+}
+
+static const char* scb_status_name(Debug_SCB_Status status)
+{
+    switch (status)
+    {
+        case Debug_SCB_Status_Drawn:
+            return "drawn";
+        case Debug_SCB_Status_Skipped:
+            return "skipped";
+        case Debug_SCB_Status_Offscreen:
+            return "offscreen";
+        case Debug_SCB_Status_NoPixels:
+            return "no_pixels";
+        default:
+            return "invalid";
     }
 }
 
@@ -1611,6 +1632,96 @@ json DebugAdapter::GetScreenshot()
     return result;
 }
 
+static const char* const k_video_recording_ratios[] = { "screen", "square", "4:3", "16:9", "16:10" };
+static const char* const k_video_recording_qualities[] = { "low", "medium", "high", "lossless", "lossless_compressed" };
+static const int k_video_recording_ratio_count = sizeof(k_video_recording_ratios) / sizeof(k_video_recording_ratios[0]);
+static const int k_video_recording_quality_count = sizeof(k_video_recording_qualities) / sizeof(k_video_recording_qualities[0]);
+
+static int find_video_recording_option(const std::string& value, const char* const* options, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (value == options[i])
+            return i;
+    }
+    return -1;
+}
+
+json DebugAdapter::StartVideoRecording(const std::string& file_path, int scale, const std::string& aspect_ratio, const std::string& quality)
+{
+    json result;
+
+    if (!m_core || !m_core->GetMedia()->IsReady())
+    {
+        result["error"] = "No media loaded";
+        Log("[MCP] StartVideoRecording failed: No media loaded");
+        return result;
+    }
+
+    if (emu_is_video_recording())
+    {
+        result["error"] = "Video recording is already active";
+        return result;
+    }
+
+    int ratio = aspect_ratio.empty() ? config_video.recording_ratio : find_video_recording_option(aspect_ratio, k_video_recording_ratios, k_video_recording_ratio_count);
+    int quality_index = quality.empty() ? config_video.recording_quality : find_video_recording_option(quality, k_video_recording_qualities, k_video_recording_quality_count);
+
+    if ((scale != 0) && ((scale < 1) || (scale > 20)))
+    {
+        result["error"] = "Invalid scale";
+        return result;
+    }
+
+    if ((ratio < 0) || (quality_index < 0))
+    {
+        result["error"] = "Invalid aspect ratio or quality";
+        return result;
+    }
+
+    if (scale != 0)
+        config_video.recording_scale = scale;
+    config_video.recording_ratio = ratio;
+    config_video.recording_quality = quality_index;
+
+    if (!gui_action_start_video_recording(file_path.empty() ? NULL : file_path.c_str()))
+    {
+        result["error"] = "Failed to start video recording";
+        Log("[MCP] StartVideoRecording failed: %s", file_path.c_str());
+        return result;
+    }
+
+    result["success"] = true;
+    result["file_path"] = video_recorder_get_file_path();
+    result["scale"] = config_video.recording_scale;
+    result["aspect_ratio"] = k_video_recording_ratios[config_video.recording_ratio];
+    result["quality"] = k_video_recording_qualities[config_video.recording_quality];
+
+    return result;
+}
+
+json DebugAdapter::StopVideoRecording()
+{
+    json result;
+
+    if (!emu_is_video_recording())
+    {
+        result["error"] = "Video recording is not active";
+        return result;
+    }
+
+    std::string file_path = video_recorder_get_file_path();
+    u32 frames = video_recorder_get_frame_count();
+
+    gui_action_stop_video_recording();
+
+    result["success"] = true;
+    result["file_path"] = file_path;
+    result["frames"] = frames;
+
+    return result;
+}
+
 json DebugAdapter::GetFrameBuffer(const std::string& buffer_type)
 {
     json result;
@@ -1726,6 +1837,7 @@ json DebugAdapter::GetSprite(int index, const std::string& format)
         result["collision_id"] = info.sprcoll & 0x0F;
         result["collision_disabled"] = IS_SET_BIT(info.sprcoll, 5);
         result["skipped"] = info.skipped;
+        result["status"] = scb_status_name(info.status);
         result["bbox_x"] = info.bbox_x;
         result["bbox_y"] = info.bbox_y;
         result["hoff"] = info.hoff;
@@ -3349,6 +3461,7 @@ static const GLYNX_Trace_Filter_Definition k_trace_filters[] =
     {"mikey.display.palette", TRACE_MIKEY_DISPLAY, TRACE_MIKEY_DISPLAY_FILTER_PALETTE},
     {"mikey.display.dma", TRACE_MIKEY_DISPLAY, TRACE_MIKEY_DISPLAY_FILTER_DMA},
     {"mikey.display.timing", TRACE_MIKEY_DISPLAY, TRACE_MIKEY_DISPLAY_FILTER_TIMING},
+    {"mikey.display.missed_vblank", TRACE_MIKEY_DISPLAY, TRACE_MIKEY_DISPLAY_FILTER_MISSED_VBLANK},
     {"mikey.audio.channels", TRACE_MIKEY_AUDIO, TRACE_MIKEY_AUDIO_FILTER_CHANNELS},
     {"mikey.audio.mixer", TRACE_MIKEY_AUDIO, TRACE_MIKEY_AUDIO_FILTER_MIXER},
     {"mikey.audio.clocks", TRACE_MIKEY_AUDIO, TRACE_MIKEY_AUDIO_FILTER_CLOCKS},
@@ -3370,6 +3483,7 @@ static const GLYNX_Trace_Filter_Definition k_trace_filters[] =
 
 json DebugAdapter::SetTraceLog(const json& arguments)
 {
+    static const char* const k_vblank_watch_operations[] = { "read", "write", "read_write" };
     TraceLogger* logger = m_core->GetTraceLogger();
     if (!logger)
         return {{"error", "Trace logger not available"}};
@@ -3442,6 +3556,30 @@ json DebugAdapter::SetTraceLog(const json& arguments)
             return {{"error", "Invalid trace disk size"}};
     }
     std::string output_path = arguments.value("output_path", "");
+
+    int vblank_watch_address_value = config_debug.trace_vblank_watch_address;
+    std::string vblank_watch_address = arguments.value("vblank_watch_address", "");
+    if (!vblank_watch_address.empty())
+    {
+        u16 address = 0;
+        if (!parse_hex_with_prefix(vblank_watch_address, &address))
+            return {{"error", "Invalid vblank watch address"}};
+        vblank_watch_address_value = address;
+    }
+
+    int vblank_watch_operation_value = config_debug.trace_vblank_watch_operation;
+    std::string vblank_watch_operation = arguments.value("vblank_watch_operation", "");
+    if (!vblank_watch_operation.empty())
+    {
+        vblank_watch_operation_value = -1;
+        for (int i = 0; i < 3; i++)
+        {
+            if (vblank_watch_operation == k_vblank_watch_operations[i])
+                vblank_watch_operation_value = i;
+        }
+        if (vblank_watch_operation_value < 0)
+            return {{"error", "Invalid vblank watch operation"}};
+    }
 
     bool was_enabled = gui_debug_trace_logger_is_enabled();
     bool storage_change = arguments.contains("output") && output != config_debug.trace_output;
@@ -3520,6 +3658,9 @@ json DebugAdapter::SetTraceLog(const json& arguments)
     config_debug.trace_mikey_audio_events = (int)masks[TRACE_MIKEY_AUDIO];
     config_debug.trace_cartridge_events = (int)masks[TRACE_CARTRIDGE];
     config_debug.trace_debug_events = (int)masks[TRACE_DEBUG_MESSAGE];
+    config_debug.trace_vblank_watch_address = vblank_watch_address_value;
+    config_debug.trace_vblank_watch_operation = vblank_watch_operation_value;
+    gui_debug_trace_logger_sync_vblank_watch();
 
     json active = json::array();
     for (size_t i = 0; i < sizeof(k_trace_filters) / sizeof(k_trace_filters[0]); i++)
@@ -3535,6 +3676,13 @@ json DebugAdapter::SetTraceLog(const json& arguments)
         {"memory_size", gui_debug_trace_logger_memory_size_name(memory_size)},
         {"disk_size", gui_debug_trace_logger_disk_size_name(disk_size)}, {"filters", active},
         {"total_entries", logger->GetCount()}};
+    if ((flags & TRACE_FLAG_MIKEY_DISPLAY) && (masks[TRACE_MIKEY_DISPLAY] & TRACE_MIKEY_DISPLAY_FILTER_MISSED_VBLANK))
+    {
+        char address[8];
+        snprintf(address, sizeof(address), "%04X", config_debug.trace_vblank_watch_address);
+        result["vblank_watch_address"] = address;
+        result["vblank_watch_operation"] = k_vblank_watch_operations[config_debug.trace_vblank_watch_operation];
+    }
     if (output == gui_TraceOutput_Disk)
         result["output_path"] = gui_debug_trace_logger_get_output_path();
     return result;
@@ -3589,5 +3737,205 @@ json DebugAdapter::RewindSeek(int snapshot)
     result["total"] = count;
     result["age_seconds"] = (double)(age * fps) / 60.0;
     result["pc"] = ss.str();
+    return result;
+}
+
+struct ProfilerEntry
+{
+    u32 index;
+    u64 key;
+    std::string name;
+    const char* symbol;
+};
+
+static const char* const k_profiler_type_names[] = { "root", "halt", "call", "irq" };
+
+static bool profiler_entry_compare(const ProfilerEntry& a, const ProfilerEntry& b)
+{
+    if (a.key != b.key)
+        return a.key > b.key;
+    return a.index < b.index;
+}
+
+static double profiler_round(double value)
+{
+    return floor((value * 100.0) + 0.5) / 100.0;
+}
+
+json DebugAdapter::SetProfiler(const std::string& action)
+{
+    json result;
+
+    Profiler* profiler = m_core->GetProfiler();
+    if (!IsValidPointer(profiler))
+    {
+        result["error"] = "Profiler not available";
+        return result;
+    }
+
+    if (action == "start")
+    {
+        if (!config_debug.debug)
+        {
+            config_debug.debug = true;
+            emu_debug_continue();
+        }
+        gui_debug_profiler_show(true);
+    }
+    else if (action == "stop")
+        gui_debug_profiler_show(false);
+    else if (action == "reset")
+    {
+        profiler->Reset();
+        gui_debug_profiler_reset();
+    }
+    else
+    {
+        result["error"] = "Invalid profiler action";
+        return result;
+    }
+
+    result["success"] = true;
+    result["action"] = action;
+    result["window_open"] = config_debug.show_profiler;
+    return result;
+}
+
+json DebugAdapter::GetProfilerData(const std::string& sort, int count, const std::string& filter)
+{
+    json result;
+
+    Profiler* profiler = m_core->GetProfiler();
+    if (!IsValidPointer(profiler) || !IsValidPointer(profiler->GetFunctions()))
+    {
+        result["error"] = "Profiler not available";
+        return result;
+    }
+
+    if (count < 1)
+        count = 50;
+    if (count > 1000)
+        count = 1000;
+
+    profiler->Sync();
+
+    const GLYNX_Profiler_Function* functions = profiler->GetFunctions();
+    u32 function_count = profiler->GetFunctionCount();
+    u64 total = profiler->GetTotalCycles();
+    u32 frame_cycles = gui_debug_profiler_get_frame_cycles();
+    double frames = (double)profiler->GetFrameCount();
+
+    std::string filter_upper = filter;
+    std::transform(filter_upper.begin(), filter_upper.end(), filter_upper.begin(), ::toupper);
+
+    std::vector<ProfilerEntry> entries;
+
+    for (u32 i = 0; i < function_count; i++)
+    {
+        const GLYNX_Profiler_Function& function = functions[i];
+        bool pseudo = (function.type == PROFILER_FUNCTION_ROOT) || (function.type == PROFILER_FUNCTION_HALT);
+
+        ProfilerEntry entry;
+        entry.index = i;
+        entry.key = 0;
+        entry.symbol = "none";
+
+        if (function.type == PROFILER_FUNCTION_ROOT)
+            entry.name = "[Root]";
+        else if (function.type == PROFILER_FUNCTION_HALT)
+            entry.name = "[HALT]";
+        else
+        {
+            bool is_manual = false;
+            const char* name = gui_debug_get_symbol_name(function.address, &is_manual);
+            if (IsValidPointer(name))
+            {
+                entry.name = name;
+                entry.symbol = is_manual ? "manual" : "auto";
+            }
+        }
+
+        if (!filter_upper.empty())
+        {
+            std::string name_upper = entry.name;
+            std::transform(name_upper.begin(), name_upper.end(), name_upper.begin(), ::toupper);
+
+            char address[8];
+            snprintf(address, sizeof(address), "%04X", function.address);
+
+            bool name_match = (name_upper.find(filter_upper) != std::string::npos);
+            bool address_match = !pseudo && (std::string(address).find(filter_upper) != std::string::npos);
+
+            if (!name_match && !address_match)
+                continue;
+        }
+
+        if (sort == "exclusive")
+            entry.key = function.exclusive_cycles;
+        else if (sort == "calls")
+            entry.key = function.calls;
+        else if (sort == "average")
+            entry.key = (function.completed > 0) ? function.inclusive_cycles / function.completed : 0;
+        else if (sort == "max")
+            entry.key = (function.completed > 0) ? function.max_cycles : 0;
+        else
+            entry.key = function.inclusive_cycles;
+
+        entries.push_back(entry);
+    }
+
+    std::sort(entries.begin(), entries.end(), profiler_entry_compare);
+
+    json functions_array = json::array();
+
+    for (size_t i = 0; (i < entries.size()) && (i < (size_t)count); i++)
+    {
+        const GLYNX_Profiler_Function& function = functions[entries[i].index];
+        bool root = (function.type == PROFILER_FUNCTION_ROOT);
+        bool pseudo = root || (function.type == PROFILER_FUNCTION_HALT);
+        json item;
+        char text[16];
+
+        item["name"] = entries[i].name;
+        item["type"] = k_profiler_type_names[function.type];
+
+        if (!pseudo)
+        {
+            item["symbol"] = entries[i].symbol;
+            snprintf(text, sizeof(text), "%04X", function.address);
+            item["address"] = text;
+        }
+
+        if (!root)
+        {
+            item["calls"] = function.calls;
+            item["calls_per_frame"] = (frames > 0.0) ? profiler_round((double)function.calls / frames) : 0.0;
+            item["inclusive_cycles"] = function.inclusive_cycles;
+            item["inclusive_percent"] = (total > 0) ? profiler_round(((double)function.inclusive_cycles * 100.0) / (double)total) : 0.0;
+        }
+
+        item["exclusive_cycles"] = function.exclusive_cycles;
+        item["exclusive_percent"] = (total > 0) ? profiler_round(((double)function.exclusive_cycles * 100.0) / (double)total) : 0.0;
+
+        if (!root && (function.completed > 0))
+        {
+            item["average_cycles"] = function.inclusive_cycles / function.completed;
+            item["min_cycles"] = function.min_cycles;
+            item["max_cycles"] = function.max_cycles;
+        }
+
+        functions_array.push_back(item);
+    }
+
+    result["collecting"] = profiler->IsEnabled();
+    result["window_open"] = config_debug.show_profiler;
+    result["total_cycles"] = total;
+    result["frame_cycles"] = frame_cycles;
+    result["frames"] = profiler_round(frames);
+    result["function_count"] = function_count - 2;
+    result["sort"] = sort;
+    result["count"] = functions_array.size();
+    result["functions"] = functions_array;
+
     return result;
 }

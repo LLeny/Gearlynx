@@ -118,6 +118,8 @@ public:
     json GetCartStatus();
     json GetEepromStatus();
     json GetScreenshot();
+    json StartVideoRecording(const std::string& file_path, int scale, const std::string& aspect_ratio, const std::string& quality);
+    json StopVideoRecording();
     json GetFrameBuffer(const std::string& buffer_type);
     json GetSprite(int index, const std::string& format);
 
@@ -171,13 +173,12 @@ public:
     json SetTraceLog(bool enabled, u32 flags, bool debug_output, const std::string& output,
         const std::string& memory_size, const std::string& disk_size, const std::string& output_path);
     json SetTraceLog(const json& arguments);
+    json SetProfiler(const std::string& action);
+    json GetProfilerData(const std::string& sort, int count, const std::string& filter);
 
     // Rewind
     json GetRewindStatus();
     json RewindSeek(int snapshot);
-
-    // Core access
-    GearlynxCore* GetCore() { return m_core; }
 
 private:
     GearlynxCore* m_core;

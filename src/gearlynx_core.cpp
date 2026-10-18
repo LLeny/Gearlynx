@@ -35,6 +35,7 @@
 #include "mikey.h"
 #include "random.h"
 #include "trace_logger.h"
+#include "profiler.h"
 #include "memory_stream.h"
 
 GearlynxCore::GearlynxCore()
@@ -49,6 +50,7 @@ GearlynxCore::GearlynxCore()
     InitPointer(m_mikey);
     InitPointer(m_random);
     InitPointer(m_trace_logger);
+    InitPointer(m_profiler);
     m_paused = true;
     m_total_cycles = 0;
     m_comlynx_sync_callback = NULL;
@@ -69,6 +71,7 @@ GearlynxCore::~GearlynxCore()
     SafeDelete(m_mikey);
     SafeDelete(m_random);
     SafeDelete(m_trace_logger);
+    SafeDelete(m_profiler);
 }
 
 void GearlynxCore::Init(GLYNX_Pixel_Format pixel_format)
@@ -82,7 +85,7 @@ void GearlynxCore::Init(GLYNX_Pixel_Format pixel_format)
     m_m6502 = new M6502(m_bus, m_random);
     m_input = new Input(m_media);
     m_suzy = new Suzy(m_media, m_m6502, m_input, m_bus);
-    m_mikey = new Mikey(m_suzy, m_media, m_m6502, m_bus, m_random);
+    m_mikey = new Mikey(m_suzy, m_input, m_media, m_m6502, m_bus, m_random);
     m_memory = new Memory(m_media, m_input, m_suzy, m_mikey, m_m6502, m_bus, m_random);
     m_audio = new Audio(m_mikey);
 
@@ -102,6 +105,9 @@ void GearlynxCore::Init(GLYNX_Pixel_Format pixel_format)
     m_suzy->SetTraceLogger(m_trace_logger);
     m_mikey->SetTraceLogger(m_trace_logger);
     m_media->SetTraceLogger(m_trace_logger);
+    m_profiler = new Profiler(&m_total_cycles);
+    m_m6502->SetProfiler(m_profiler);
+    m_mikey->SetProfiler(m_profiler);
 #endif
 
 }
@@ -116,6 +122,7 @@ bool GearlynxCore::RunToVBlankTemplate(u8* frame_buffer, s16* sample_buffer,
     int* sample_count, GLYNX_Debug_Run* debug, bool render)
 {
     m_mikey->GetLcdScreen()->SetBuffer(frame_buffer);
+    m_input->BeginFrame();
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
     m_suzy->BeginSpriteBoundingBoxFrame();
 #endif
@@ -245,6 +252,7 @@ bool GearlynxCore::RunToVBlank(u8* frame_buffer, s16* sample_buffer,
 void GearlynxCore::EndFrame(s16* sample_buffer, int* sample_count)
 {
     m_audio->EndFrame(sample_buffer, sample_count);
+    m_input->ApplyPendingState();
 }
 
 void GearlynxCore::RenderFrameBuffer(u8* frame_buffer)
@@ -332,6 +340,11 @@ TraceLogger* GearlynxCore::GetTraceLogger()
     return m_trace_logger;
 }
 
+Profiler* GearlynxCore::GetProfiler()
+{
+    return m_profiler;
+}
+
 void GearlynxCore::SetComLynxCallbacks(GLYNX_ComLynx_Publish_Callback publish_callback,
     GLYNX_ComLynx_Sample_Callback sample_callback, GLYNX_ComLynx_Break_Callback break_callback,
     GLYNX_ComLynx_Sync_Callback sync_callback, void* user_data)
@@ -354,11 +367,6 @@ void GearlynxCore::SetComLynxTurboCallbacks(GLYNX_ComLynx_Turbo_Sample_Callback 
 void GearlynxCore::SetComLynxCableConnected(bool connected)
 {
     m_mikey->SetComLynxCableConnected(connected);
-}
-
-bool GearlynxCore::IsComLynxCableConnected() const
-{
-    return m_mikey->IsComLynxCableConnected();
 }
 
 void GearlynxCore::KeyPressed(GLYNX_Keys key)
@@ -412,12 +420,6 @@ void GearlynxCore::ResetROM(bool preserve_ram)
         stream.seekg(0, stream.beg);
         m_media->LoadRam(stream, size);
     }
-}
-
-void GearlynxCore::ResetSound()
-{
-    bool is_lynx2 = (m_media->GetConsoleType() != GLYNX_CONSOLE_MODEL_I);
-    m_audio->Reset(is_lynx2);
 }
 
 void GearlynxCore::SaveRam()
@@ -579,14 +581,15 @@ bool GearlynxCore::SaveState(const char* path, int index, bool screenshot)
     using namespace std;
 
     string full_path = GetSaveStatePath(path, index);
+    string temp_path = full_path + ".tmp";
     Debug("Saving state to %s...", full_path.c_str());
 
     ofstream stream;
-    open_ofstream_utf8(stream, full_path.c_str(), ios::out | ios::binary);
+    open_ofstream_utf8(stream, temp_path.c_str(), ios::out | ios::binary);
 
     if (!stream.is_open())
     {
-        Error("Failed to open save state file for writing: %s", full_path.c_str());
+        Error("Failed to open save state file for writing: %s", temp_path.c_str());
         return false;
     }
 
@@ -594,14 +597,16 @@ bool GearlynxCore::SaveState(const char* path, int index, bool screenshot)
     if (!SaveState(stream, size, screenshot))
     {
         stream.close();
+        remove_file_utf8(temp_path.c_str());
         Error("Failed to save state to file: %s", full_path.c_str());
         return false;
     }
 
     stream.close();
 
-    if (!stream.good())
+    if (!stream.good() || !rename_file_utf8(temp_path.c_str(), full_path.c_str()))
     {
+        remove_file_utf8(temp_path.c_str());
         Error("Failed to write save state file: %s", full_path.c_str());
         return false;
     }
@@ -682,8 +687,10 @@ bool GearlynxCore::SaveState(std::ostream& stream, size_t& size, bool screenshot
     m_input->SaveState(stream);
     m_media->SaveState(stream);
     m_random->SaveState(stream);
+    m_bus->SaveState(stream);
 
 #if defined(__LIBRETRO__)
+    UNUSED(screenshot);
     GLYNX_SaveState_Header_Libretro header;
     header.magic = GLYNX_SAVESTATE_MAGIC;
     header.version = GLYNX_SAVESTATE_VERSION;
@@ -904,7 +911,7 @@ bool GearlynxCore::LoadState(std::istream& stream)
 
     Debug("Unserializing save state...");
 
-    m_m6502->LoadState(stream);
+    m_m6502->LoadState(stream, header.version);
     if (!stream.good())
         return false;
     m_memory->LoadState(stream, header.version);
@@ -930,6 +937,11 @@ bool GearlynxCore::LoadState(std::istream& stream)
     {
         m_random->LoadState(stream);
     }
+
+    if (header.version >= 27)
+        m_bus->LoadState(stream);
+    else
+        m_bus->Reset();
 
     return stream.good() && stream.tellg() == (std::streamoff)body_size;
 }
@@ -1062,6 +1074,10 @@ void GearlynxCore::Reset()
 {
     m_paused = false;
     m_total_cycles = 0;
+
+    if (IsValidPointer(m_profiler))
+        m_profiler->Reset();
+
     m_comlynx_next_sync_cycle = 0;
 
     m_media->Reset();

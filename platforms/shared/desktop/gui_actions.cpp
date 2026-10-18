@@ -20,6 +20,7 @@
 #define GUI_ACTIONS_IMPORT
 #include "gui_actions.h"
 #include "gui.h"
+#include "gui_notifications.h"
 #include "gui_debug.h"
 #include "gui_debug_memory.h"
 #include "gui_debug_trace_logger.h"
@@ -27,11 +28,14 @@
 #include "emu.h"
 #include "ogl_renderer.h"
 #include "rewind.h"
+#include "video_recorder.h"
 #include "events.h"
 #include "gearlynx.h"
 #include "application.h"
 #include "display.h"
 #include "utils.h"
+
+static std::string get_auto_file_path(int dir_option, const std::string& custom_path, const char* extension);
 
 void gui_action_load_defaults(void)
 {
@@ -42,6 +46,7 @@ void gui_action_load_defaults(void)
         return;
 
     emu_stop_vgm_recording();
+    emu_stop_video_recording();
     emu_comlynx_stop();
     emu_save_persistent_data();
 
@@ -76,11 +81,13 @@ void gui_action_load_defaults(void)
     application_apply_settings();
 
     config_write();
+    gui_notify(gui_NotificationSuccess, ICON_MD_SETTINGS_BACKUP_RESTORE, "Default settings restored");
 }
 
 void gui_action_reset(void)
 {
-    gui_set_status_message("Resetting...", 3000);
+    if (!emu_is_empty())
+        gui_notify(gui_NotificationInfo, ICON_MD_REFRESH, "Reset");
 
     gui_debug_trace_logger_clear();
 
@@ -119,12 +126,12 @@ void gui_action_pause(void)
 {
     if (emu_is_paused())
     {
-        gui_set_status_message("Resumed", 3000);
+        gui_notify(gui_NotificationInfo, ICON_MD_PLAY_ARROW, "Resumed", NULL, "pause", 1500);
         emu_resume();
     }
     else
     {
-        gui_set_status_message("Paused", 3000);
+        gui_notify(gui_NotificationInfo, ICON_MD_PAUSE, "Paused", NULL, "pause", 1500);
         emu_pause();
     }
 }
@@ -141,12 +148,12 @@ void gui_action_ffwd(void)
 
     if (config_emulator.ffwd)
     {
-        gui_set_status_message("Fast Forward ON", 3000);
+        gui_notify(gui_NotificationInfo, ICON_MD_FAST_FORWARD, "Fast forward on", NULL, "ffwd", 1500);
         display_disable_vsync();
     }
     else
     {
-        gui_set_status_message("Fast Forward OFF", 3000);
+        gui_notify(gui_NotificationInfo, ICON_MD_FAST_FORWARD, "Fast forward off", NULL, "ffwd", 1500);
         display_use_vsync_if_enabled();
         emu_audio_reset();
     }
@@ -164,7 +171,7 @@ void gui_action_rewind_pressed(void)
     emu_reset_rewind_timing();
     rewind_set_active(true);
     display_use_vsync_if_enabled();
-    gui_set_status_message("Rewinding...", 500);
+    gui_notify(gui_NotificationInfo, ICON_MD_FAST_REWIND, "Rewinding", NULL, "rewind", 500);
 }
 
 void gui_action_rewind_released(void)
@@ -189,13 +196,6 @@ void gui_action_save_screenshot(const char* path)
     if (!emu_get_core()->GetMedia()->IsReady())
         return;
 
-    time_t now = time(0);
-    tm ltm;
-
-    char date_time[32] = {};
-    if (get_local_time(now, &ltm))
-        strftime(date_time, sizeof(date_time), "%Y-%m-%d %H%M%S", &ltm);
-
     string file_path;
 
     if (path != NULL)
@@ -205,32 +205,56 @@ void gui_action_save_screenshot(const char* path)
             file_path += ".png";
     }
     else
+        file_path = get_auto_file_path(config_emulator.screenshots_dir_option, config_emulator.screenshots_path, ".png");
+
+    if (emu_save_screenshot(file_path.c_str()))
+        gui_notify(gui_NotificationSuccess, ICON_MD_PHOTO_CAMERA, "Screenshot saved", file_path.c_str());
+    else
+        gui_notify(gui_NotificationError, NULL, "Unable to save screenshot", file_path.c_str());
+}
+
+bool gui_action_start_video_recording(const char* path)
+{
+    using namespace std;
+
+    if (!emu_get_core()->GetMedia()->IsReady())
+        return false;
+
+    string file_path;
+
+    if (path != NULL)
+        file_path = path;
+    else
+        file_path = get_auto_file_path(config_emulator.video_recordings_dir_option, config_emulator.video_recordings_path, ".avi");
+
+    if (!emu_start_video_recording(file_path.c_str()))
     {
-        switch ((Directory_Location)config_emulator.screenshots_dir_option)
-        {
-            default:
-            case Directory_Location_Default:
-            {
-                file_path = file_path.assign(config_root_path)+ "/" + string(emu_get_core()->GetMedia()->GetFileName()) + " - " + date_time + ".png";
-                break;
-            }
-            case Directory_Location_ROM:
-            {
-                file_path = file_path.assign(emu_get_core()->GetMedia()->GetFilePath()) + " - " + date_time + ".png";
-                break;
-            }
-            case Directory_Location_Custom:
-            {
-                file_path = file_path.assign(config_emulator.screenshots_path)+ "/" + string(emu_get_core()->GetMedia()->GetFileName()) + " - " + date_time + ".png";
-                break;
-            }
-        }
+        gui_notify(gui_NotificationError, NULL, "Unable to start video recording", file_path.c_str());
+        return false;
     }
 
-    emu_save_screenshot(file_path.c_str());
+    gui_notify(gui_NotificationInfo, ICON_MD_FIBER_MANUAL_RECORD, "Recording video", file_path.c_str(), "video");
+    return true;
+}
 
-    string message = "Screenshot saved to " + file_path;
-    gui_set_status_message(message.c_str(), 3000);
+void gui_action_stop_video_recording(void)
+{
+    using namespace std;
+
+    if (!emu_is_video_recording())
+        return;
+
+    string file_path = video_recorder_get_file_path();
+    emu_stop_video_recording();
+    gui_notify(gui_NotificationSuccess, ICON_MD_VIDEOCAM, "Video saved", file_path.c_str(), "video");
+}
+
+void gui_action_toggle_video_recording(void)
+{
+    if (emu_is_video_recording())
+        gui_action_stop_video_recording();
+    else
+        gui_action_start_video_recording(NULL);
 }
 
 void gui_action_save_sprite(const char* path, int index)
@@ -244,16 +268,14 @@ void gui_action_save_sprite(const char* path, int index)
     if (file_path.find_last_of(".") == string::npos)
         file_path += ".png";
 
-    emu_save_sprite(file_path.c_str(), index);
-
-    string message = "Sprite saved to " + file_path;
-    gui_set_status_message(message.c_str(), 3000);
+    if (emu_save_sprite(file_path.c_str(), index))
+        gui_notify(gui_NotificationSuccess, ICON_MD_IMAGE, "Sprite saved", file_path.c_str());
+    else
+        gui_notify(gui_NotificationError, NULL, "Unable to save sprite", file_path.c_str());
 }
 
 void gui_action_save_all_sprites(const char* folder_path)
 {
-    using namespace std;
-
     if (!emu_get_core()->GetMedia()->IsReady())
         return;
 
@@ -261,13 +283,115 @@ void gui_action_save_all_sprites(const char* folder_path)
     if (count > 64)
         count = 64;
 
+    bool saved = true;
+
     for (int i = 0; i < count; i++)
     {
         char file_path[512];
         snprintf(file_path, sizeof(file_path), "%s/sprite_%02d.png", folder_path, i);
-        emu_save_sprite(file_path, i);
+
+        if (!emu_save_sprite(file_path, i))
+            saved = false;
     }
 
-    string message = "All sprites saved to " + string(folder_path);
-    gui_set_status_message(message.c_str(), 3000);
+    if (saved)
+        gui_notify(gui_NotificationSuccess, ICON_MD_PHOTO_LIBRARY, "All sprites saved", folder_path);
+    else
+        gui_notify(gui_NotificationError, NULL, "Unable to save all sprites", folder_path);
+}
+
+void gui_action_save_state(const char* path)
+{
+    if (emu_is_empty())
+        return;
+
+    if (IsValidPointer(path) && path[0] != '\0')
+    {
+        if (emu_save_state_file(path))
+            gui_notify(gui_NotificationSuccess, ICON_MD_SAVE, "State saved", path);
+        else
+            gui_notify(gui_NotificationError, NULL, "Unable to save state", path);
+
+        return;
+    }
+
+    int slot = config_emulator.save_slot + 1;
+    char message[64];
+
+    if (emu_save_state_slot(slot))
+    {
+        snprintf(message, sizeof(message), "State saved to slot %d", slot);
+        gui_notify(gui_NotificationSuccess, ICON_MD_SAVE, message);
+    }
+    else
+    {
+        snprintf(message, sizeof(message), "Unable to save state to slot %d", slot);
+        gui_notify(gui_NotificationError, NULL, message);
+    }
+}
+
+void gui_action_load_state(const char* path)
+{
+    if (emu_is_empty())
+        return;
+
+    if (IsValidPointer(path) && path[0] != '\0')
+    {
+        if (emu_load_state_file(path))
+            gui_notify(gui_NotificationSuccess, ICON_MD_RESTORE, "State loaded", path);
+        else
+            gui_notify(gui_NotificationError, NULL, "Unable to load state", path);
+
+        return;
+    }
+
+    int slot = config_emulator.save_slot + 1;
+    char message[64];
+
+    if (emu_load_state_slot(slot))
+    {
+        snprintf(message, sizeof(message), "State loaded from slot %d", slot);
+        gui_notify(gui_NotificationSuccess, ICON_MD_RESTORE, message);
+    }
+    else
+    {
+        snprintf(message, sizeof(message), "Unable to load state from slot %d", slot);
+        gui_notify(gui_NotificationError, NULL, message);
+    }
+}
+
+static std::string get_auto_file_path(int dir_option, const std::string& custom_path, const char* extension)
+{
+    using namespace std;
+
+    time_t now = time(0);
+    tm ltm;
+
+    char date_time[32] = {};
+    if (get_local_time(now, &ltm))
+        strftime(date_time, sizeof(date_time), "%Y-%m-%d %H%M%S", &ltm);
+
+    string file_path;
+
+    switch ((Directory_Location)dir_option)
+    {
+        default:
+        case Directory_Location_Default:
+        {
+            file_path = file_path.assign(config_root_path)+ "/" + string(emu_get_core()->GetMedia()->GetFileName()) + " - " + date_time + extension;
+            break;
+        }
+        case Directory_Location_ROM:
+        {
+            file_path = file_path.assign(emu_get_core()->GetMedia()->GetFilePath()) + " - " + date_time + extension;
+            break;
+        }
+        case Directory_Location_Custom:
+        {
+            file_path = file_path.assign(custom_path)+ "/" + string(emu_get_core()->GetMedia()->GetFileName()) + " - " + date_time + extension;
+            break;
+        }
+    }
+
+    return file_path;
 }

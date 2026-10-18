@@ -36,10 +36,10 @@ M6502::M6502(Bus* bus, Random* random)
     m_random = random;
     InitPointer(m_memory);
     InitPointer(m_trace_logger);
+    InitPointer(m_profiler);
     m_opcode_cycles = k_m6502_opcode_cycles_lynx2;
     m_opcode_sizes = k_m6502_opcode_sizes_lynx2;
     m_s.cycles = 0;
-    m_s.memory_accesses = 0;
     m_s.irq_asserted = false;
     m_s.irq_pending = 0;
     m_s.debug_next_irq = 0;
@@ -51,6 +51,11 @@ M6502::M6502(Bus* bus, Random* random)
     m_s.total_ticks = 0;
     m_breakpoints_enabled = false;
     m_breakpoints_irq_enabled = 0;
+    m_vblank_watch_read = false;
+    m_vblank_watch_write = false;
+    m_vblank_watch_address = 0;
+    ResetVBlankWatch();
+    RefreshMemoryHooks();
     m_cpu_breakpoint_hit = false;
     m_memory_breakpoint_hit = false;
     m_debug_brk_breakpoint_hit = false;
@@ -64,7 +69,6 @@ M6502::M6502(Bus* bus, Random* random)
     m_skip_irq_on_step = false;
     m_disassembler_call_stack_size = 0;
     m_disassembler_syntax = GLYNX_Disassembler_Syntax_Gearlynx;
-    m_reset_value = -1;
     m_prev_opcode_address = 0xFFFF;
     m_stream_open = false;
     m_page_mode_tick_discount = 0;
@@ -84,6 +88,21 @@ void M6502::Init(Memory* memory)
 void M6502::SetTraceLogger(TraceLogger* trace_logger)
 {
     m_trace_logger = trace_logger;
+}
+
+void M6502::SetProfiler(Profiler* profiler)
+{
+    m_profiler = profiler;
+}
+
+void M6502::ProfilerEnter(u16 address, bool irq)
+{
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    m_profiler->Enter(address, address, 0, m_s.S.GetValue(), irq, GetInstructionTicks());
+#else
+    UNUSED(address);
+    UNUSED(irq);
+#endif
 }
 
 void M6502::LogInstructionEvent()
@@ -135,29 +154,17 @@ void M6502::Reset(bool is_lynx2)
     m_s.debug_next_irq = 1;
     DisassembleNextOPCode();
 
-    if (m_reset_value < 0)
-    {
-        u32 rnd = m_random->Next();
-        m_s.A.SetValue((u8)rnd);
-        m_s.X.SetValue((u8)(rnd >> 8));
-        m_s.Y.SetValue((u8)(rnd >> 16));
-        m_s.S.SetValue((u8)(rnd >> 24));
-        m_s.P.SetValue(m_random->Next8Bit());
-    }
-    else
-    {
-        m_s.A.SetValue(m_reset_value & 0xFF);
-        m_s.X.SetValue(m_reset_value & 0xFF);
-        m_s.Y.SetValue(m_reset_value & 0xFF);
-        m_s.S.SetValue(m_reset_value & 0xFF);
-        m_s.P.SetValue(m_reset_value & 0xFF);
-    }
+    u32 rnd = m_random->Next();
+    m_s.A.SetValue((u8)rnd);
+    m_s.X.SetValue((u8)(rnd >> 8));
+    m_s.Y.SetValue((u8)(rnd >> 16));
+    m_s.S.SetValue((u8)(rnd >> 24));
+    m_s.P.SetValue(m_random->Next8Bit());
 
     SetFlag(FLAG_UNUSED | FLAG_INTERRUPT | FLAG_BREAK);
     ClearFlag(FLAG_DECIMAL);
 
     m_s.cycles = 0;
-    m_s.memory_accesses = 0;
     m_s.irq_asserted = false;
     m_s.irq_pending = 0;
     m_s.debug_irq_mask = 0;
@@ -181,16 +188,12 @@ void M6502::Reset(bool is_lynx2)
     m_page_mode_tick_discount = 0;
     m_irq_sample_after_opcode = false;
     ClearDisassemblerCallStack();
+    ResetVBlankWatch();
 }
 
 M6502::M6502_State* M6502::GetState()
 {
     return &m_s;
-}
-
-void M6502::SetResetValue(int value)
-{
-    m_reset_value = value;
 }
 
 void M6502::SetDisassemblerSyntax(GLYNX_Disassembler_Syntax syntax)
@@ -201,15 +204,11 @@ void M6502::SetDisassemblerSyntax(GLYNX_Disassembler_Syntax syntax)
     m_disassembler_syntax = syntax;
 }
 
-GLYNX_Disassembler_Syntax M6502::GetDisassemblerSyntax() const
-{
-    return m_disassembler_syntax;
-}
-
 void M6502::EnableBreakpoints(bool enable, u8 irqs)
 {
     m_breakpoints_enabled = enable;
     m_breakpoints_irq_enabled = irqs;
+    RefreshMemoryHooks();
 }
 
 bool M6502::BreakpointHit()
@@ -229,6 +228,45 @@ bool M6502::GetBreakpointHitAddress(u16* address)
 void M6502::ResetBreakpoints()
 {
     m_breakpoints.clear();
+}
+
+void M6502::SetVBlankWatch(bool read, bool write, u16 address)
+{
+    if ((m_vblank_watch_read == read) && (m_vblank_watch_write == write) &&
+        (m_vblank_watch_address == address))
+        return;
+
+    m_vblank_watch_read = read;
+    m_vblank_watch_write = write;
+    m_vblank_watch_address = address;
+    ResetVBlankWatch();
+    RefreshMemoryHooks();
+}
+
+u32 M6502::UpdateVBlankWatch()
+{
+    if (!m_vblank_watch_read && !m_vblank_watch_write)
+        return 0;
+
+    bool missed = m_vblank_watch_armed && !m_vblank_watch_hit;
+    m_vblank_watch_armed = true;
+    m_vblank_watch_hit = false;
+    m_vblank_watch_misses = missed ? m_vblank_watch_misses + 1 : 0;
+
+    return m_vblank_watch_misses;
+}
+
+void M6502::RefreshMemoryHooks()
+{
+    m_memory_hooks_read = m_vblank_watch_read || m_breakpoints_enabled;
+    m_memory_hooks_write = m_vblank_watch_write || m_breakpoints_enabled;
+}
+
+void M6502::ResetVBlankWatch()
+{
+    m_vblank_watch_hit = false;
+    m_vblank_watch_armed = false;
+    m_vblank_watch_misses = 0;
 }
 
 bool M6502::AddBreakpoint(char* text, bool read, bool write, bool execute)
@@ -369,6 +407,9 @@ void M6502::ResetDebuggerExecutionState()
     m_breakpoint_hit_address_valid = false;
     m_breakpoint_hit_address = 0xFFFF;
     m_prev_opcode_address = 0xFFFF;
+
+    if (IsValidPointer(m_profiler))
+        m_profiler->ResetStack();
 }
 
 void M6502::CheckMemoryBreakpoints(u16 address, bool read)
@@ -439,10 +480,10 @@ void M6502::SaveState(std::ostream& stream)
     m_s.P.SaveState(stream);
 
     StateSerializer serializer(stream);
-    Serialize(serializer);
+    Serialize(serializer, GLYNX_SAVESTATE_VERSION);
 }
 
-void M6502::LoadState(std::istream& stream)
+void M6502::LoadState(std::istream& stream, int version)
 {
     m_s.PC.LoadState(stream);
     m_s.A.LoadState(stream);
@@ -452,13 +493,19 @@ void M6502::LoadState(std::istream& stream)
     m_s.P.LoadState(stream);
 
     StateSerializer serializer(stream);
-    Serialize(serializer);
+    Serialize(serializer, version);
+
+    ResetVBlankWatch();
 }
 
-void M6502::Serialize(StateSerializer& s)
+void M6502::Serialize(StateSerializer& s, int version)
 {
     G_SERIALIZE(s, m_s.cycles);
-    G_SERIALIZE(s, m_s.memory_accesses);
+    if (version < 29)
+    {
+        u32 legacy_memory_accesses = 0;
+        G_SERIALIZE(s, legacy_memory_accesses);
+    }
     G_SERIALIZE(s, m_s.irq_asserted);
     G_SERIALIZE(s, m_s.irq_pending);
     G_SERIALIZE(s, m_s.debug_next_irq);

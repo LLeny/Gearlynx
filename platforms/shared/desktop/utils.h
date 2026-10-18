@@ -132,66 +132,6 @@ static inline void get_current_date_time_string(char* buffer, size_t size)
     get_date_time_string(timestamp, buffer, size);
 }
 
-static inline bool remove_directory_and_contents(const char* path)
-{
-#if defined(_WIN32)
-    std::string search = std::string(path) + "\\*";
-    WIN32_FIND_DATAA fd;
-    HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
-
-    if (hFind == INVALID_HANDLE_VALUE)
-        return false;
-
-    do
-    {
-        const char* name = fd.cFileName;
-        if (strcmp(name, ".") && strcmp(name, ".."))
-        {
-            std::string item = std::string(path) + "\\" + name;
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            {
-                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-                    remove_directory_and_contents(item.c_str());
-                RemoveDirectoryA(item.c_str());
-            }
-            else
-            {
-                DeleteFileA(item.c_str());
-            }
-        }
-    }
-    while (FindNextFileA(hFind, &fd));
-
-    FindClose(hFind);
-    return RemoveDirectoryA(path) != 0;
-#else
-    DIR* dir = opendir(path);
-    if (!dir)
-        return false;
-
-    struct dirent* entry;
-
-    while ((entry = readdir(dir)) != NULL)
-    {
-        const char* name = entry->d_name;
-        if (strcmp(name, ".") && strcmp(name, ".."))
-        {
-            std::string item = std::string(path) + "/" + name;
-            struct stat st;
-            if (lstat(item.c_str(), &st) == 0) {
-                if (S_ISDIR(st.st_mode))
-                    remove_directory_and_contents(item.c_str());
-                else
-                    unlink(item.c_str());
-            }
-        }
-    }
-
-    closedir(dir);
-    return (rmdir(path) == 0);
-#endif
-}
-
 static inline int ends_with(const char* s, const char* suffix)
 {
     size_t sl = strlen(s);
@@ -344,7 +284,7 @@ static inline bool path_exists(const char* path)
         return false;
 
 #if defined(_WIN32)
-    DWORD attributes = GetFileAttributesA(path);
+    DWORD attributes = GetFileAttributesW(utf8_to_wstring(path).c_str());
     return attributes != INVALID_FILE_ATTRIBUTES;
 #else
     struct stat info;
@@ -360,8 +300,9 @@ static inline void get_executable_path(char* path, size_t size)
     path[0] = '\0';
 
 #if defined(_WIN32)
-    DWORD len = GetModuleFileNameA(NULL, path, (DWORD)size);
-    if (len > 0 && len < size)
+    wchar_t wide_path[1024];
+    DWORD len = GetModuleFileNameW(NULL, wide_path, 1024);
+    if (len > 0 && len < 1024 && WideCharToMultiByte(CP_UTF8, 0, wide_path, -1, path, (int)size, NULL, NULL) > 0)
     {
         char* last_slash = strrchr(path, '\\');
         if (last_slash) *last_slash = '\0';
@@ -385,9 +326,11 @@ static inline void get_executable_path(char* path, size_t size)
         path[0] = '\0';
     }
 #elif defined(__APPLE__)
-    uint32_t bufsize = (uint32_t)size;
-    if (_NSGetExecutablePath(path, &bufsize) == 0) {
-        char* dir = dirname(path);
+    char executable_path[PATH_MAX];
+    char resolved_path[PATH_MAX];
+    uint32_t bufsize = (uint32_t)sizeof(executable_path);
+    if (_NSGetExecutablePath(executable_path, &bufsize) == 0) {
+        char* dir = dirname(realpath(executable_path, resolved_path) ? resolved_path : executable_path);
         size_t length = dir ? strlen(dir) : size;
         if (length >= size)
         {

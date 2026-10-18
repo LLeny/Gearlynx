@@ -35,6 +35,7 @@ static inline void process(config_Operation operation)
     CONFIG_BOOL("Debug", "CallStack", config_debug.show_call_stack, false);
     CONFIG_BOOL("Debug", "Breakpoints", config_debug.show_breakpoints, false);
     CONFIG_BOOL("Debug", "Symbols", config_debug.show_symbols, false);
+    CONFIG_BOOL("Debug", "Profiler", config_debug.show_profiler, false);
     CONFIG_BOOL("Debug", "PSG", config_debug.show_psg, false);
     CONFIG_BOOL("Debug", "TraceLogger", config_debug.show_trace_logger, false);
     CONFIG_BOOL("Debug", "MikeyRegs", config_debug.show_mikey_regs, false);
@@ -85,12 +86,14 @@ static inline void process(config_Operation operation)
     CONFIG_INT_RANGE("Debug", "TraceSuzyInputEvents", config_debug.trace_suzy_input_events, TRACE_SUZY_INPUT_FILTER_ALL, 0, TRACE_SUZY_INPUT_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceMikeyTimerEvents", config_debug.trace_mikey_timer_events, TRACE_MIKEY_TIMER_FILTER_ALL, 0, TRACE_MIKEY_TIMER_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceMikeyInterruptEvents", config_debug.trace_mikey_interrupt_events, TRACE_MIKEY_INTERRUPT_FILTER_ALL, 0, TRACE_MIKEY_INTERRUPT_FILTER_ALL);
-    CONFIG_INT_RANGE("Debug", "TraceMikeyDisplayEvents", config_debug.trace_mikey_display_events, TRACE_MIKEY_DISPLAY_FILTER_ALL, 0, TRACE_MIKEY_DISPLAY_FILTER_ALL);
+    CONFIG_INT_RANGE("Debug", "TraceMikeyDisplayEvents", config_debug.trace_mikey_display_events, TRACE_MIKEY_DISPLAY_FILTER_DEFAULT, 0, TRACE_MIKEY_DISPLAY_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceMikeyUartEvents", config_debug.trace_mikey_uart_events, TRACE_MIKEY_UART_FILTER_ALL, 0, TRACE_MIKEY_UART_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceRedEyeEvents", config_debug.trace_redeye_events, TRACE_REDEYE_FILTER_ALL, 0, TRACE_REDEYE_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceMikeyAudioEvents", config_debug.trace_mikey_audio_events, TRACE_MIKEY_AUDIO_FILTER_ALL, 0, TRACE_MIKEY_AUDIO_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceCartridgeEvents", config_debug.trace_cartridge_events, TRACE_CARTRIDGE_FILTER_ALL, 0, TRACE_CARTRIDGE_FILTER_ALL);
     CONFIG_INT_RANGE("Debug", "TraceDebugEvents", config_debug.trace_debug_events, TRACE_DEBUG_FILTER_MESSAGES, 0, TRACE_DEBUG_FILTER_MESSAGES);
+    CONFIG_INT_RANGE("Debug", "TraceVBlankWatchAddress", config_debug.trace_vblank_watch_address, 0, 0, 0xFFFF);
+    CONFIG_INT_RANGE("Debug", "TraceVBlankWatchOperation", config_debug.trace_vblank_watch_operation, 1, 0, 2);
     CONFIG_BOOL("Debug", "DebugOutputEnabled", config_debug.debug_output_enabled, false);
     CONFIG_INT_RANGE("Debug", "TraceOutput", config_debug.trace_output, 0, 0, 1);
     CONFIG_INT_RANGE("Debug", "TraceCapacity", config_debug.trace_capacity, 0, 0, 4);
@@ -160,10 +163,12 @@ static inline void process(config_Operation operation)
     CONFIG_STRING_NOT_EMPTY("Emulator", "SaveStatesPath", config_emulator.savestates_path, config_root_path);
     CONFIG_INT("Emulator", "ScreenshotDirOption", config_emulator.screenshots_dir_option, 0);
     CONFIG_STRING_NOT_EMPTY("Emulator", "ScreenshotPath", config_emulator.screenshots_path, config_root_path);
+    CONFIG_INT("Emulator", "VideoRecordingDirOption", config_emulator.video_recordings_dir_option, 0);
+    CONFIG_STRING_NOT_EMPTY("Emulator", "VideoRecordingPath", config_emulator.video_recordings_path, config_root_path);
     CONFIG_STRING("Emulator", "LastOpenPath", config_emulator.last_open_path, "");
     CONFIG_INT("Emulator", "WindowWidth", config_emulator.window_width, 770);
     CONFIG_INT("Emulator", "WindowHeight", config_emulator.window_height, 600);
-    CONFIG_BOOL("Emulator", "StatusMessages", config_emulator.status_messages, false);
+    CONFIG_BOOL("Emulator", "ShowNotifications", config_emulator.show_notifications, true);
     CONFIG_BOOL("Emulator", "AllowScreenSaver", config_emulator.allow_screensaver, false);
 
     // Services and hardware
@@ -205,6 +210,9 @@ static inline void process(config_Operation operation)
     }
 
     CONFIG_INT_RANGE("Video", "SyncMode", config_video.sync_mode, config_VideoSync_Fixed, config_VideoSync_Disabled, config_VideoSync_VRR);
+    CONFIG_INT_RANGE("Video", "RecordingScale", config_video.recording_scale, 2, 1, 20);
+    CONFIG_INT_RANGE("Video", "RecordingAspectRatio", config_video.recording_ratio, 0, 0, 4);
+    CONFIG_INT_RANGE("Video", "RecordingQuality", config_video.recording_quality, 2, 0, 4);
 
     // Background colors
     CONFIG_FLOAT("Video", "BackgroundColorR", config_video.background_color[config_Theme_Dark][0], 0.1f);
@@ -304,6 +312,7 @@ static inline void process(config_Operation operation)
     CONFIG_HOTKEY("SelectSlot4", config_hotkeys[config_HotkeyIndex_SelectSlot4], SDL_SCANCODE_4, SDL_KMOD_CTRL);
     CONFIG_HOTKEY("SelectSlot5", config_hotkeys[config_HotkeyIndex_SelectSlot5], SDL_SCANCODE_5, SDL_KMOD_CTRL);
     CONFIG_HOTKEY("Mute", config_hotkeys[config_HotkeyIndex_Mute], SDL_SCANCODE_U, SDL_KMOD_CTRL);
+    CONFIG_HOTKEY("VideoRecording", config_hotkeys[config_HotkeyIndex_VideoRecording], SDL_SCANCODE_R, (SDL_Keymod)(SDL_KMOD_CTRL | SDL_KMOD_SHIFT));
 }
 
 //**************************************
@@ -439,7 +448,7 @@ static void migrate(int file_version)
         write_int("Debug", "TraceSuzyInputEvents", TRACE_SUZY_INPUT_FILTER_ALL);
         write_int("Debug", "TraceMikeyTimerEvents", TRACE_MIKEY_TIMER_FILTER_ALL);
         write_int("Debug", "TraceMikeyInterruptEvents", TRACE_MIKEY_INTERRUPT_FILTER_ALL);
-        write_int("Debug", "TraceMikeyDisplayEvents", TRACE_MIKEY_DISPLAY_FILTER_ALL);
+        write_int("Debug", "TraceMikeyDisplayEvents", TRACE_MIKEY_DISPLAY_FILTER_DEFAULT);
         write_int("Debug", "TraceMikeyUartEvents", TRACE_MIKEY_UART_FILTER_ALL);
         write_int("Debug", "TraceRedEyeEvents", TRACE_REDEYE_FILTER_ALL);
         write_int("Debug", "TraceMikeyAudioEvents", TRACE_MIKEY_AUDIO_FILTER_ALL);

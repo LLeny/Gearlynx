@@ -24,6 +24,7 @@
 
 #include "gui_debug_memeditor.h"
 #include "gui_debug_constants.h"
+#include "gui.h"
 
 MemEditor::MemEditor()
 {
@@ -837,6 +838,8 @@ void MemEditor::BookMarkPopup()
 
     PushGuiFont();
 
+    gui_center_next_window();
+
     if (ImGui::BeginPopupModal(popup_title, NULL, ImGuiWindowFlags_AlwaysAutoResize))
     {
         static char address[9] = "";
@@ -913,6 +916,8 @@ void MemEditor::WatchPopup()
     }
 
     PushGuiFont();
+
+    gui_center_next_window();
 
     if (ImGui::BeginPopupModal(popup_title, NULL, ImGuiWindowFlags_AlwaysAutoResize))
     {
@@ -2459,29 +2464,3 @@ void MemEditor::SaveSettings(std::ostream& stream)
     }
 }
 
-void MemEditor::LoadSettings(std::istream& stream)
-{
-    m_bookmarks.clear();
-    int bookmark_count = 0;
-    stream.read((char*)&bookmark_count, sizeof(int));
-    for (int i = 0; i < bookmark_count; i++)
-    {
-        Bookmark bookmark;
-        stream.read((char*)&bookmark.address, sizeof(int));
-        stream.read(bookmark.name, sizeof(bookmark.name));
-        m_bookmarks.push_back(bookmark);
-    }
-
-    m_watches.clear();
-    int watch_count = 0;
-    stream.read((char*)&watch_count, sizeof(int));
-    for (int i = 0; i < watch_count; i++)
-    {
-        Watch watch;
-        stream.read((char*)&watch.address, sizeof(int));
-        stream.read(watch.notes, sizeof(watch.notes));
-        stream.read((char*)&watch.size, sizeof(int));
-        stream.read((char*)&watch.format, sizeof(int));
-        m_watches.push_back(watch);
-    }
-}

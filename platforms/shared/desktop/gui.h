@@ -47,6 +47,7 @@ enum gui_ShortCutEvent
     gui_ShortcutSelectSlot4,
     gui_ShortcutSelectSlot5,
     gui_ShortcutScreenshot,
+    gui_ShortcutVideoRecording,
     gui_ShortcutFullscreen,
     gui_ShortcutDebugStepOver,
     gui_ShortcutDebugStepInto,
@@ -70,7 +71,7 @@ struct gui_HotkeyMapping
     bool allow_repeat;
 };
 
-#define GUI_HOTKEY_MAP_COUNT 25
+#define GUI_HOTKEY_MAP_COUNT 26
 
 const gui_HotkeyMapping gui_hotkey_map[GUI_HOTKEY_MAP_COUNT] = {
     {gui_ShortcutOpenROM, config_HotkeyIndex_OpenROM, false},
@@ -87,6 +88,7 @@ const gui_HotkeyMapping gui_hotkey_map[GUI_HOTKEY_MAP_COUNT] = {
     {gui_ShortcutSelectSlot4, config_HotkeyIndex_SelectSlot4, false},
     {gui_ShortcutSelectSlot5, config_HotkeyIndex_SelectSlot5, false},
     {gui_ShortcutScreenshot, config_HotkeyIndex_Screenshot, false},
+    {gui_ShortcutVideoRecording, config_HotkeyIndex_VideoRecording, false},
     {gui_ShortcutFullscreen, config_HotkeyIndex_Fullscreen, false},
     {gui_ShortcutShowMainMenu, config_HotkeyIndex_ShowMainMenu, false},
     {gui_ShortcutDebugStepInto, config_HotkeyIndex_DebugStepInto, true},
@@ -102,7 +104,6 @@ const gui_HotkeyMapping gui_hotkey_map[GUI_HOTKEY_MAP_COUNT] = {
 
 EXTERN bool gui_in_use;
 EXTERN bool gui_main_window_hovered;
-EXTERN bool gui_main_menu_hovered;
 EXTERN ImFont* gui_default_font;
 EXTERN ImFont* gui_default_fonts[4];
 EXTERN ImFont* gui_roboto_font;
@@ -110,7 +111,6 @@ EXTERN ImFont* gui_material_icons_font;
 EXTERN int gui_main_window_width;
 EXTERN int gui_main_window_height;
 EXTERN int gui_main_menu_height;
-EXTERN int gui_scale_multiplier;
 EXTERN SDL_Scancode* gui_configured_key;
 EXTERN int* gui_configured_button;
 EXTERN config_Hotkey* gui_configured_hotkey;
@@ -127,8 +127,8 @@ EXTERN bool gui_is_rom_loading(void);
 EXTERN bool gui_finish_loading_rom(void);
 EXTERN void gui_load_bios(const char* path);
 EXTERN void gui_set_style(void);
-EXTERN void gui_set_status_message(const char* message, Uint64 milliseconds);
 EXTERN void gui_set_error_message(const char* message);
+EXTERN void gui_center_next_window(void);
 
 #undef GUI_IMPORT
 #undef EXTERN

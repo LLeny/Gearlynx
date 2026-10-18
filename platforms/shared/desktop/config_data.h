@@ -99,11 +99,13 @@ struct config_Emulator
     int savestates_dir_option;
     std::string savestates_path;
     int screenshots_dir_option;
+    int video_recordings_dir_option;
     std::string screenshots_path;
+    std::string video_recordings_path;
     std::string last_open_path;
     int window_width;
     int window_height;
-    bool status_messages;
+    bool show_notifications;
     bool allow_screensaver;
     int mcp_tcp_port;
     std::string mcp_http_address;
@@ -126,6 +128,9 @@ struct config_Video
     float background_color_debugger[config_Theme_Count][3];
     int shader_mode;
     std::string shader_preset_path;
+    int recording_scale;
+    int recording_ratio;
+    int recording_quality;
 };
 
 struct config_Audio
@@ -200,6 +205,7 @@ enum config_HotkeyIndex
     config_HotkeyIndex_SelectSlot4,
     config_HotkeyIndex_SelectSlot5,
     config_HotkeyIndex_Mute,
+    config_HotkeyIndex_VideoRecording,
     config_HotkeyIndex_COUNT
 };
 
@@ -224,6 +230,7 @@ struct config_Debug
     bool show_call_stack;
     bool show_breakpoints;
     bool show_symbols;
+    bool show_profiler;
     bool show_memory;
     bool show_psg;
     bool show_trace_logger;
@@ -277,6 +284,8 @@ struct config_Debug
     int trace_mikey_audio_events;
     int trace_cartridge_events;
     int trace_debug_events;
+    int trace_vblank_watch_address;
+    int trace_vblank_watch_operation;
     bool debug_output_enabled;
     int trace_output;
     int trace_capacity;

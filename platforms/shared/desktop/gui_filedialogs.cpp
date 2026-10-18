@@ -25,6 +25,7 @@
 #include <cstring>
 #include "gui.h"
 #include "gui_actions.h"
+#include "gui_notifications.h"
 #include "gui_debug_memory.h"
 #include "gui_debug_disassembler.h"
 #include "gui_debug_trace_logger.h"
@@ -46,11 +47,13 @@ enum FileDialogID
     FileDialog_ChooseSavestatePath,
     FileDialog_ChooseSavefilePath,
     FileDialog_ChooseScreenshotPath,
+    FileDialog_ChooseVideoRecordingPath,
     FileDialog_ChooseTracePath,
     FileDialog_LoadBIOS,
     FileDialog_LoadSymbols,
     FileDialog_SaveScreenshot,
     FileDialog_SaveVGM,
+    FileDialog_SaveVideo,
     FileDialog_SaveMemoryDumpBinary,
     FileDialog_SaveMemoryDumpText,
     FileDialog_LoadMemoryDumpBinary,
@@ -106,6 +109,8 @@ static const char* get_save_file_extension(FileDialogID id)
             return ".png";
         case FileDialog_SaveVGM:
             return ".vgm";
+        case FileDialog_SaveVideo:
+            return ".avi";
         case FileDialog_SaveMemoryDumpBinary:
             return ".bin";
         case FileDialog_SaveMemoryDumpText:
@@ -197,6 +202,15 @@ void gui_file_dialog_choose_screenshot_path(void)
     SDL_ShowOpenFolderDialog(file_dialog_callback, (void*)(intptr_t)FileDialog_ChooseScreenshotPath, application_sdl_window, default_path, false);
 }
 
+void gui_file_dialog_choose_video_recording_path(void)
+{
+    if (!begin_dialog())
+        return;
+
+    const char* default_path = config_emulator.video_recordings_path.empty() ? NULL : config_emulator.video_recordings_path.c_str();
+    SDL_ShowOpenFolderDialog(file_dialog_callback, (void*)(intptr_t)FileDialog_ChooseVideoRecordingPath, application_sdl_window, default_path, false);
+}
+
 void gui_file_dialog_choose_trace_path(void)
 {
     if (!begin_dialog())
@@ -240,6 +254,15 @@ void gui_file_dialog_save_vgm(void)
 
     SDL_DialogFileFilter filters[] = { { "VGM Files", "vgm" } };
     SDL_ShowSaveFileDialog(file_dialog_callback, (void*)(intptr_t)FileDialog_SaveVGM, application_sdl_window, filters, 1, NULL);
+}
+
+void gui_file_dialog_save_video(void)
+{
+    if (!begin_dialog())
+        return;
+
+    SDL_DialogFileFilter filters[] = { { "AVI Files", "avi" } };
+    SDL_ShowSaveFileDialog(file_dialog_callback, (void*)(intptr_t)FileDialog_SaveVideo, application_sdl_window, filters, 1, NULL);
 }
 
 void gui_file_dialog_save_memory_dump(bool binary)
@@ -385,27 +408,23 @@ static void process_dialog_result(FileDialogID id, const char* path)
         case FileDialog_LoadRAM:
         {
             emu_load_ram(path);
+            gui_notify(gui_NotificationInfo, ICON_MD_SD_STORAGE, "RAM loaded", path);
             break;
         }
         case FileDialog_SaveRAM:
         {
             emu_save_ram(path);
+            gui_notify(gui_NotificationInfo, ICON_MD_SD_STORAGE, "RAM saved", path);
             break;
         }
         case FileDialog_LoadState:
         {
-            std::string message("Loading state from ");
-            message += path;
-            gui_set_status_message(message.c_str(), 3000);
-            emu_load_state_file(path);
+            gui_action_load_state(path);
             break;
         }
         case FileDialog_SaveState:
         {
-            std::string message("Saving state to ");
-            message += path;
-            gui_set_status_message(message.c_str(), 3000);
-            emu_save_state_file(path);
+            gui_action_save_state(path);
             break;
         }
         case FileDialog_ChooseSavestatePath:
@@ -427,6 +446,12 @@ static void process_dialog_result(FileDialogID id, const char* path)
             config_emulator.screenshots_path.assign(path);
             break;
         }
+        case FileDialog_ChooseVideoRecordingPath:
+        {
+            strncpy_fit(gui_video_recordings_path, path, sizeof(gui_video_recordings_path));
+            config_emulator.video_recordings_path.assign(path);
+            break;
+        }
         case FileDialog_ChooseTracePath:
         {
             gui_debug_trace_logger_set_output_directory(path);
@@ -443,7 +468,11 @@ static void process_dialog_result(FileDialogID id, const char* path)
         case FileDialog_LoadSymbols:
         {
             gui_debug_reset_symbols();
-            gui_debug_load_symbols_file(path);
+
+            if (gui_debug_load_symbols_file(path))
+                gui_notify(gui_NotificationSuccess, ICON_MD_LABEL, "Symbols loaded", path);
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to load symbols", path);
             break;
         }
         case FileDialog_SaveScreenshot:
@@ -453,50 +482,66 @@ static void process_dialog_result(FileDialogID id, const char* path)
         }
         case FileDialog_SaveVGM:
         {
-            emu_start_vgm_recording(path);
-            gui_set_status_message("VGM recording started", 3000);
+            if (emu_start_vgm_recording(path))
+                gui_notify(gui_NotificationInfo, ICON_MD_FIBER_MANUAL_RECORD, "VGM recording started", path, "vgm");
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to start VGM recording", path, "vgm");
+            break;
+        }
+        case FileDialog_SaveVideo:
+        {
+            gui_action_start_video_recording(path);
             break;
         }
         case FileDialog_SaveMemoryDumpBinary:
         {
             gui_debug_memory_save_dump(path, true);
+            gui_notify(gui_NotificationInfo, ICON_MD_SAVE, "Memory dump saved", path);
             break;
         }
         case FileDialog_SaveMemoryDumpText:
         {
             gui_debug_memory_save_dump(path, false);
+            gui_notify(gui_NotificationInfo, ICON_MD_SAVE, "Memory dump saved", path);
             break;
         }
         case FileDialog_LoadMemoryDumpBinary:
         {
             gui_debug_memory_load_dump(path);
+            gui_notify(gui_NotificationInfo, ICON_MD_FILE_UPLOAD, "Memory dump loaded", path);
             break;
         }
         case FileDialog_SaveDisassemblerFull:
-        {
-            gui_debug_save_disassembler(path, true);
-            break;
-        }
         case FileDialog_SaveDisassemblerVisible:
         {
-            gui_debug_save_disassembler(path, false);
+            if (gui_debug_save_disassembler(path, id == FileDialog_SaveDisassemblerFull))
+                gui_notify(gui_NotificationSuccess, ICON_MD_CODE, "Disassembly saved", path);
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to save the disassembly", path);
             break;
         }
         case FileDialog_SaveLog:
         {
-            gui_debug_save_log(path);
+            if (gui_debug_save_log(path))
+                gui_notify(gui_NotificationSuccess, ICON_MD_DESCRIPTION, "Trace log saved", path);
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to save the trace log", path);
             break;
         }
         case FileDialog_SaveDebugSettings:
         {
-            gui_debug_save_settings(path);
-            gui_set_status_message("Debug settings saved", 3000);
+            if (gui_debug_save_settings(path))
+                gui_notify(gui_NotificationSuccess, ICON_MD_BUG_REPORT, "Debug settings saved", path);
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to save debug settings", path);
             break;
         }
         case FileDialog_LoadDebugSettings:
         {
-            gui_debug_load_settings(path);
-            gui_set_status_message("Debug settings loaded", 3000);
+            if (gui_debug_load_settings(path))
+                gui_notify(gui_NotificationSuccess, ICON_MD_BUG_REPORT, "Debug settings loaded", path);
+            else
+                gui_notify(gui_NotificationError, NULL, "Unable to load debug settings", path);
             break;
         }
         case FileDialog_SaveSprite:

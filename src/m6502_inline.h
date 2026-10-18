@@ -27,6 +27,7 @@
 #include "memory.h"
 #include "bus.h"
 #include "trace_logger.h"
+#include "profiler.h"
 
 INLINE u32 M6502::RunInstruction()
 {
@@ -38,7 +39,6 @@ INLINE u32 M6502::RunInstruction()
 #endif
 
     m_s.cycles = 0;
-    m_s.memory_accesses = 0;
     m_s.onebyte_un_nop = false;
     m_s.page_mode_discounts = 0;
     m_irq_sample_after_opcode = false;
@@ -47,7 +47,7 @@ INLINE u32 M6502::RunInstruction()
     {
         if (m_s.irq_asserted)
         {
-            m_s.halted = false;
+            Halt(false);
             m_prev_opcode_address = m_s.PC.GetValue();
             CheckIRQs();
             if(m_s.irq_pending && !m_skip_irq_on_step)
@@ -104,7 +104,7 @@ inline void M6502::HandleIRQ()
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
     m_s.debug_next_irq = 3;
     u16 dest = m_s.PC.GetValue();
-    PushCallStack(pc, dest, pc);
+    PushCallStack(pc, dest, pc, true);
 
     TraceIRQEvent(pc, dest);
 #endif
@@ -136,16 +136,15 @@ INLINE void M6502::AssertIRQ(bool asserted, u8 irq_mask)
 INLINE void M6502::Halt(bool halted)
 {
     m_s.halted = halted;
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    if (unlikely(m_profiler->IsEnabled()))
+        m_profiler->Halt(halted, GetInstructionTicks());
+#endif
 }
 
 INLINE bool M6502::IsHalted()
 {
     return m_s.halted;
-}
-
-INLINE void M6502::InjectCycles(unsigned int cycles)
-{
-    m_s.cycles += cycles;
 }
 
 INLINE u32 M6502::GetInstructionTicks()
@@ -230,11 +229,6 @@ INLINE u16 M6502::FetchOperand16()
     return (static_cast<u16>(h) << 8) | l;
 }
 
-INLINE void M6502::NotifyBusBreak()
-{
-    m_stream_open = false;
-}
-
 INLINE u8 M6502::MemRead8(u16 address)
 {
     m_stream_open = false;
@@ -257,11 +251,6 @@ INLINE bool M6502::PageCrossed(u16 old_address, u16 new_address)
     return (old_address ^ new_address) > 0x00FF;
 }
 
-INLINE u16 M6502::ZeroPageX()
-{
-    return ZERO_PAGE_ADDR | m_s.X.GetValue();
-}
-
 INLINE void M6502::SetOrClearZNFlags(u8 result)
 {
     ClearFlag(FLAG_ZERO | FLAG_NEGATIVE);
@@ -271,11 +260,6 @@ INLINE void M6502::SetOrClearZNFlags(u8 result)
 INLINE void M6502::SetZNFlags(u8 result)
 {
     m_s.P.SetValue(m_s.P.GetValue() | m_zn_flags_lut[result]);
-}
-
-INLINE void M6502::SetOverflowFlag(u8 result)
-{
-    m_s.P.SetValue((m_s.P.GetValue() & 0xBF) | (result & 0x40));
 }
 
 INLINE void M6502::SetFlag(u8 flag)
@@ -340,13 +324,6 @@ INLINE u16 M6502::ZeroPageAddressing()
 INLINE u16 M6502::ZeroPageAddressing(EightBitRegister* reg)
 {
     return ZERO_PAGE_ADDR | ((FetchOperand8() + reg->GetValue()) & 0xFF);
-}
-
-INLINE u16 M6502::ZeroPageRelativeAddressing()
-{
-    u16 address = ZeroPageAddressing();
-    s8 offset = static_cast<s8>(FetchOperand8());
-    return address + offset;
 }
 
 INLINE u16 M6502::ZeroPageIndirectAddressing()
@@ -416,12 +393,36 @@ INLINE std::vector<M6502::GLYNX_Breakpoint>* M6502::GetBreakpoints()
     return &m_breakpoints;
 }
 
+INLINE bool M6502::HasMemoryHooks(bool read) const
+{
+    return read ? m_memory_hooks_read : m_memory_hooks_write;
+}
+
+INLINE void M6502::CheckCpuAddressHooks(u16 address, bool read)
+{
+    if ((read ? m_vblank_watch_read : m_vblank_watch_write) && (address == m_vblank_watch_address))
+        m_vblank_watch_hit = true;
+
+    if (m_breakpoints_enabled)
+        CheckMemoryBreakpoints(address, read);
+}
+
+INLINE u16 M6502::GetVBlankWatchAddress() const
+{
+    return m_vblank_watch_address;
+}
+
+INLINE bool M6502::GetVBlankWatchAccess(bool read) const
+{
+    return read ? m_vblank_watch_read : m_vblank_watch_write;
+}
+
 INLINE std::stack<M6502::GLYNX_CallStackEntry>* M6502::GetDisassemblerCallStack()
 {
     return &m_disassembler_call_stack;
 }
 
-INLINE void M6502::PushCallStack(u16 src, u16 dest, u16 back)
+INLINE void M6502::PushCallStack(u16 src, u16 dest, u16 back, bool irq)
 {
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
     if (m_disassembler_call_stack_size < 256)
@@ -433,14 +434,18 @@ INLINE void M6502::PushCallStack(u16 src, u16 dest, u16 back)
         m_disassembler_call_stack.push(entry);
         m_disassembler_call_stack_size++;
     }
+
+    if (unlikely(m_profiler->IsEnabled()))
+        ProfilerEnter(dest, irq);
 #else
     UNUSED(src);
     UNUSED(dest);
     UNUSED(back);
+    UNUSED(irq);
 #endif
 }
 
-INLINE void M6502::PopCallStack()
+INLINE void M6502::PopCallStack(u8 stack_bytes)
 {
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
     if (m_disassembler_call_stack_size > 0)
@@ -448,6 +453,11 @@ INLINE void M6502::PopCallStack()
         m_disassembler_call_stack.pop();
         m_disassembler_call_stack_size--;
     }
+
+    if (unlikely(m_profiler->IsEnabled()))
+        m_profiler->Return((u8)(m_s.S.GetValue() - stack_bytes), GetInstructionTicks());
+#else
+    UNUSED(stack_bytes);
 #endif
 }
 
@@ -646,7 +656,6 @@ INLINE void M6502::PopulateDisassemblerRecord(GLYNX_Disassembler_Record* record,
     record->size = opcode_size;
     record->jump = false;
     record->jump_address = 0;
-    record->jump_bank = 0;
     record->subroutine = false;
     record->irq = 0;
     record->has_operand_address = false;

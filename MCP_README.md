@@ -18,29 +18,29 @@ This server provides tools for game development, rom hacking, reverse engineerin
     <tr>
       <td rowspan="2"><strong>Windows</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-windows-x64.mcpb">Gearlynx-1.2.33-mcpb-windows-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-windows-x64.mcpb">Gearlynx-1.2.35-mcpb-windows-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-windows-arm64.mcpb">Gearlynx-1.2.33-mcpb-windows-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-windows-arm64.mcpb">Gearlynx-1.2.35-mcpb-windows-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>macOS</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-macos-x64.mcpb">Gearlynx-1.2.33-mcpb-macos-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-macos-x64.mcpb">Gearlynx-1.2.35-mcpb-macos-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-macos-arm64.mcpb">Gearlynx-1.2.33-mcpb-macos-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-macos-arm64.mcpb">Gearlynx-1.2.35-mcpb-macos-arm64.mcpb</a></td>
     </tr>
     <tr>
       <td rowspan="2"><strong>Linux</strong></td>
       <td>x64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-linux-x64.mcpb">Gearlynx-1.2.33-mcpb-linux-x64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-linux-x64.mcpb">Gearlynx-1.2.35-mcpb-linux-x64.mcpb</a></td>
     </tr>
     <tr>
       <td>ARM64</td>
-      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.33/Gearlynx-1.2.33-mcpb-linux-arm64.mcpb">Gearlynx-1.2.33-mcpb-linux-arm64.mcpb</a></td>
+      <td><a href="https://github.com/drhelius/Gearlynx/releases/download/1.2.35/Gearlynx-1.2.35-mcpb-linux-arm64.mcpb">Gearlynx-1.2.35-mcpb-linux-arm64.mcpb</a></td>
     </tr>
   </tbody>
 </table>
@@ -57,7 +57,9 @@ This server provides tools for game development, rom hacking, reverse engineerin
 - **Bookmarks**: Memory and disassembler bookmarks for navigation
 - **Call Stack**: View function call hierarchy
 - **Trace Logger**: CPU instructions, master-clock cycles, absolute pagination, and exact Suzy/Mikey/UART/RedEye/cartridge event filters
+- **Profiler**: Per-function call counts, calls per frame, and inclusive/exclusive cycle statistics
 - **Screenshot Capture**: Get current frame as PNG image
+- **Video Recording**: Record emulated video and audio to AVI files on disk
 - **Rewind**: Time-travel debugging — seek to any recorded snapshot to inspect past emulator state
 - **Documentation Resources**: Built-in hardware and programming documentation for AI context
 - **GUI Integration**: MCP server runs alongside the emulator GUI, sharing the same state
@@ -319,6 +321,7 @@ Once configured, you can ask your AI assistant:
 - "Pause execution and show me the Mikey timers"
 - "Step through the next 5 instructions"
 - "Capture a screenshot of the current frame"
+- "Record a video of the next 600 frames to /path/to/clip.avi"
 - "Tap the A button on the controller"
 - "Show me the Suzy registers"
 
@@ -329,6 +332,7 @@ Once configured, you can ask your AI assistant:
 - "There's a data decompression routine around address 0xC000. Step through it instruction by instruction, reverse engineer the compression algorithm, and explain how it works with examples"
 - "Find where the game stores its level data in ROM. Analyze the data structure format, create a memory map showing each section, and add symbols for the data tables"
 - "The game is rendering corrupted graphics. Examine the Suzy registers, check the VIDBAS frame buffer, inspect the Mikey display settings, and diagnose what's causing the corruption. Set up watches on relevant memory addresses"
+- "Profile the game for a few seconds, then tell me which functions use the most CPU time per frame and what they do"
 
 ## Available MCP Tools
 
@@ -388,11 +392,17 @@ Exact trace filters:
 - CPU: `cpu.instructions`, `cpu.irqs`
 - Suzy math/input: `suzy.math.operations`, `suzy.math.completions`, `suzy.input.reads`
 - Suzy sprites: `suzy.sprites.engine`, `suzy.sprites.scbs`, `suzy.sprites.skips`, `suzy.sprites.collisions`, `suzy.sprites.rows`, `suzy.bus`
-- Mikey timers/display: `mikey.timers.registers`, `mikey.timers.underflows`, `mikey.timers.irqs`, `mikey.timers.links`, `mikey.interrupts`, `mikey.display.registers`, `mikey.display.palette`, `mikey.display.dma`, `mikey.display.timing`
+- Mikey timers/display: `mikey.timers.registers`, `mikey.timers.underflows`, `mikey.timers.irqs`, `mikey.timers.links`, `mikey.interrupts`, `mikey.display.registers`, `mikey.display.palette`, `mikey.display.dma`, `mikey.display.timing`, `mikey.display.missed_vblank`
 - Mikey audio/UART: `mikey.audio.channels`, `mikey.audio.mixer`, `mikey.audio.clocks`, `mikey.uart.registers`, `mikey.uart.transfers`, `mikey.uart.irqs`, `mikey.uart.problems`, `mikey.uart.breaks`, `mikey.uart.comlynx`
 - RedEye/cartridge/debug: `redeye.packets`, `redeye.problems`, `cartridge.address`, `cartridge.accesses`, `cartridge.eeprom`, `cartridge.audin`, `cartridge.storage`, `debug.messages`
 
+`mikey.display.missed_vblank` logs each frame where the CPU access set with `vblank_watch_address` (hex) and `vblank_watch_operation` (`read`, `write`, or `read_write`) did not happen before the Timer 2 underflow that raises the VBL interrupt, with the number of consecutive misses; the first VBlank after starting, changing the watch, resetting, or loading a state only arms the check. Both parameters persist and keep their current values when omitted.
+
 CPU entries are captured before opcode fetch. Hardware events emitted while Suzy and Mikey process a completed CPU/bus batch use that committed batch's `GearlynxCore::m_total_cycles` position. A backwards clock after reset is formatted as `RESET`; sequence identities remain monotonic across clears and resets.
+
+### Profiler
+- `set_profiler` - Start, stop, or reset the function profiler with `action` (`start`, `stop`, `reset`). `start` opens the Profiler debugger window and `stop` closes it. Statistics are only collected while the window is visible (in headless mode, while started), starting on the next frame
+- `get_profiler_data` - Read profiler results: `collecting`, `window_open`, `total_cycles`, `frame_cycles`, `frames`, `function_count`, and per-function `name`, `symbol`, `address`, `type`, `calls`, `calls_per_frame`, `inclusive_cycles`, `inclusive_percent`, `exclusive_cycles`, `exclusive_percent`, `average_cycles`, `min_cycles`, and `max_cycles`. Optional `sort` (`inclusive`, `exclusive`, `calls`, `average`, `max`; highest first), `count` (default 50, max 1000), and `filter` (name or hex address substring)
 
 ### Breakpoints
 - `set_breakpoint` - Set execution, read, or write breakpoint at address. Read/write breakpoints stop with PC at instruction after memory access
@@ -417,6 +427,8 @@ CPU entries are captured before opcode fetch. Hardware events emitted while Suzy
 
 ### Screen Capture
 - `get_screenshot` - Capture current screen frame as base64 PNG
+- `start_video_recording` - Start recording video and audio to an AVI file (MJPEG, uncompressed or PNG compressed video, 16-bit PCM audio). Only the resulting `file_path` is returned; the video stays on disk. Optional `file_path` (absolute; if omitted, an automatic name in the configured video recordings directory), `scale` (1-20), `aspect_ratio` (`screen`, `square`, `4:3`, `16:9`, `16:10`), and `quality` (`low`, `medium`, `high`, `lossless`, `lossless_compressed`). `lossless` is uncompressed; `lossless_compressed` stores PNG frames, much smaller but playable only with FFmpeg based players. Given options update the recording settings, same as the GUI menu. `screen` follows the display aspect ratio, which uses square pixels while debugging. When a shader preset is active outside debug mode, the shader output is recorded at the output window size and `scale` and `aspect_ratio` are ignored. Frames are recorded only while the emulator runs, so continue or step execution before stopping
+- `stop_video_recording` - Stop the active recording and finalize the AVI file. Returns `file_path` and the number of recorded `frames`
 - `get_frame_buffer` - Capture debug frame buffer as base64 PNG (VIDBAS from Suzy or DISPADR from Mikey)
 - `get_sprite` - Render SCB sprite image or return sprite metadata
 

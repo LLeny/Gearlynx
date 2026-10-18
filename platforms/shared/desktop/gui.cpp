@@ -35,26 +35,25 @@
 #include "gui_menus.h"
 #include "gui_popups.h"
 #include "gui_actions.h"
+#include "gui_notifications.h"
+#include "gui_colors.h"
 #include "gui_debug.h"
 #include "gui_debug_memory.h"
 #include "gui_debug_disassembler.h"
 #include "gui_debug_psg.h"
 
-static bool status_message_active = false;
-static char status_message[4096] = "";
-static Uint64 status_message_start_time = 0;
-static Uint64 status_message_duration = 0;
 static bool error_window_active = false;
 static char error_message[4096] = "";
 static bool loading_rom_active = false;
 static char loading_rom_path[4096] = "";
 static char loading_symbol_path[4096] = "";
 static void main_window(void);
-static void show_status_message(void);
 static void show_error_window(void);
 static void show_loading_popup(void);
+static void select_save_slot(int slot);
 static bool finish_loading_rom(void);
 static void update_window_visibility_padding(void);
+static ImVec2 snap_to_physical_pixel(const ImVec2& pos);
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
 static ImU32 sprite_bounding_box_color(void);
 static void draw_sprite_bounding_boxes(const ImVec2& image_pos, const ImVec2& image_size);
@@ -141,6 +140,7 @@ void gui_apply_settings(void)
     strncpy_fit(gui_savefiles_path, config_emulator.savefiles_path.c_str(), sizeof(gui_savefiles_path));
     strncpy_fit(gui_savestates_path, config_emulator.savestates_path.c_str(), sizeof(gui_savestates_path));
     strncpy_fit(gui_screenshots_path, config_emulator.screenshots_path.c_str(), sizeof(gui_screenshots_path));
+    strncpy_fit(gui_video_recordings_path, config_emulator.video_recordings_path.c_str(), sizeof(gui_video_recordings_path));
     strncpy_fit(gui_bios_path, config_emulator.bios_path.c_str(), sizeof(gui_bios_path));
     strncpy_fit(gui_mcp_http_address, config_emulator.mcp_http_address.c_str(), sizeof(gui_mcp_http_address));
 }
@@ -177,7 +177,7 @@ void gui_render(void)
         gui_show_info();
 
     show_loading_popup();
-    show_status_message();
+    gui_notifications_render();
     show_error_window();
 
     ImGui::Render();
@@ -206,42 +206,39 @@ void gui_shortcut(gui_ShortCutEvent event)
     case gui_ShortcutMute:
         config_audio.enable = !config_audio.enable;
         emu_audio_mute(!config_audio.enable);
+        gui_notify(gui_NotificationInfo, config_audio.enable ? ICON_MD_VOLUME_UP : ICON_MD_VOLUME_OFF,
+            config_audio.enable ? "Audio unmuted" : "Audio muted", NULL, "mute", 1500);
         break;
     case gui_ShortcutSaveState:
-    {
-        std::string message("Saving state to slot ");
-        message += std::to_string(config_emulator.save_slot + 1);
-        gui_set_status_message(message.c_str(), 3000);
-        emu_save_state_slot(config_emulator.save_slot + 1);
+        gui_action_save_state(NULL);
         break;
-    }
     case gui_ShortcutLoadState:
-    {
-        std::string message("Loading state from slot ");
-        message += std::to_string(config_emulator.save_slot + 1);
-        gui_set_status_message(message.c_str(), 3000);
-        emu_load_state_slot(config_emulator.save_slot + 1);
+        gui_action_load_state(NULL);
         break;
-    }
     case gui_ShortcutSelectSlot1:
-        config_emulator.save_slot = 0;
+        select_save_slot(0);
         break;
     case gui_ShortcutSelectSlot2:
-        config_emulator.save_slot = 1;
+        select_save_slot(1);
         break;
     case gui_ShortcutSelectSlot3:
-        config_emulator.save_slot = 2;
+        select_save_slot(2);
         break;
     case gui_ShortcutSelectSlot4:
-        config_emulator.save_slot = 3;
+        select_save_slot(3);
         break;
     case gui_ShortcutSelectSlot5:
-        config_emulator.save_slot = 4;
+        select_save_slot(4);
         break;
     case gui_ShortcutScreenshot:
         gui_action_save_screenshot(NULL);
         break;
+    case gui_ShortcutVideoRecording:
+        gui_action_toggle_video_recording();
+        break;
     case gui_ShortcutFullscreen:
+        if (emu_is_video_recording())
+            break;
         config_emulator.fullscreen = !config_emulator.fullscreen;
         application_trigger_fullscreen(config_emulator.fullscreen);
         break;
@@ -305,12 +302,6 @@ bool gui_load_rom(const char* path, const char* symbol_path)
 {
     if (loading_rom_active)
         return false;
-
-    using namespace std;
-
-    string message("Loading ROM ");
-    message += path;
-    gui_set_status_message(message.c_str(), 3000);
 
     gui_debug_auto_save_settings();
 
@@ -410,7 +401,11 @@ static bool finish_loading_rom(void)
     }
 
     if (!emu_is_empty())
+    {
         application_update_title_with_rom(emu_get_core()->GetMedia()->GetFileName());
+        gui_notify(gui_NotificationSuccess, ICON_MD_VIDEOGAME_ASSET, "ROM loaded",
+            emu_get_core()->GetMedia()->GetFileName());
+    }
 
     return true;
 }
@@ -455,30 +450,21 @@ void gui_load_bios(const char* path)
         gui_set_error_message(message.c_str());
     }
     else if (result == BIOS_LOAD_OK)
-    {
-        string message("BIOS loaded successfully:\n");
-        message += filename;
-        gui_set_status_message(message.c_str(), 3000);
-    }
+        gui_notify(gui_NotificationSuccess, ICON_MD_MEMORY, "BIOS loaded", filename.c_str());
 
     gui_action_reset();
-}
-
-void gui_set_status_message(const char* message, Uint64 milliseconds)
-{
-    if (config_emulator.status_messages)
-    {
-        strncpy_fit(status_message, message, sizeof(status_message));
-        status_message_active = true;
-        status_message_start_time = SDL_GetTicks();
-        status_message_duration = milliseconds;
-    }
 }
 
 void gui_set_error_message(const char* message)
 {
     strncpy_fit(error_message, message, sizeof(error_message));
     error_window_active = true;
+}
+
+void gui_center_next_window(void)
+{
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 }
 
 void gui_set_style(void)
@@ -629,13 +615,13 @@ static void main_window(void)
 
     gui_main_window_width = image_logical_width;
     gui_main_window_height = image_logical_height;
-    gui_scale_multiplier = scale_multiplier;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar;
-    
+    bool window_visible = false;
+
     if (config_debug.debug)
     {
         flags |= ImGuiWindowFlags_AlwaysAutoResize;
@@ -643,7 +629,7 @@ static void main_window(void)
         ImGui::SetNextWindowPos(ImVec2(602, 26), ImGuiCond_FirstUseEver);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-        ImGui::Begin("Output###debug_output", &config_debug.show_screen, flags);
+        window_visible = ImGui::Begin("Output###debug_output", &config_debug.show_screen, flags);
         gui_main_window_hovered = ImGui::IsWindowHovered();
     }
     else
@@ -660,13 +646,11 @@ static void main_window(void)
 
         flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-        ImGui::Begin(GLYNX_TITLE, 0, flags);
+        window_visible = ImGui::Begin(GLYNX_TITLE, 0, flags);
         gui_main_window_hovered = ImGui::IsWindowHovered();
     }
 
     OglRendererScreenGeometry screen_geometry;
-    screen_geometry.logical_width = image_logical_width;
-    screen_geometry.logical_height = image_logical_height;
     screen_geometry.physical_width = image_physical_width;
     screen_geometry.physical_height = image_physical_height;
     screen_geometry.framebuffer_scale_x = framebuffer_scale_x;
@@ -677,9 +661,34 @@ static void main_window(void)
     float tex_v = 1.0f;
     ogl_renderer_get_screen_uv(&tex_h, &tex_v);
 
-    ImGui::Image((ImTextureID)(intptr_t)ogl_renderer_get_screen_texture(), ImVec2(image_w, image_h), ImVec2(0, 0), ImVec2(tex_h, tex_v));
+    ImVec2 image_size(image_w, image_h);
+    ImVec2 layout_max = ImGui::GetCursorScreenPos() + image_size;
+    ImVec2 image_min = snap_to_physical_pixel(ImGui::GetCursorScreenPos());
+    ImVec2 image_max = image_min + image_size;
+
+    ImGui::Dummy(image_size);
+
+    if (window_visible)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 clip_min = draw_list->GetClipRectMin();
+        ImVec2 clip_max = draw_list->GetClipRectMax();
+
+        if (!ImGui::IsWindowDocked())
+        {
+            if (clip_max.x > layout_max.x - 1.0f)
+                clip_max.x = fmaxf(clip_max.x, image_max.x);
+            if (clip_max.y > layout_max.y - 1.0f)
+                clip_max.y = fmaxf(clip_max.y, image_max.y);
+        }
+
+        draw_list->PushClipRect(clip_min, clip_max, false);
+        draw_list->AddImage((ImTextureID)(intptr_t)ogl_renderer_get_screen_texture(), image_min, image_max, ImVec2(0, 0), ImVec2(tex_h, tex_v));
+        draw_list->PopClipRect();
+        gui_notifications_render_output(image_min, image_max);
+    }
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
-    draw_sprite_bounding_boxes(ImGui::GetItemRectMin(), ImGui::GetItemRectSize());
+    draw_sprite_bounding_boxes(image_min, image_size);
 #endif
 
     if (config_video.fps)
@@ -690,6 +699,20 @@ static void main_window(void)
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
+}
+
+static ImVec2 snap_to_physical_pixel(const ImVec2& pos)
+{
+    ImGuiViewport* viewport = ImGui::GetWindowViewport();
+    ImVec2 scale = viewport->FramebufferScale;
+
+    if (scale.x <= 0.0f || scale.y <= 0.0f)
+        scale = ImGui::GetIO().DisplayFramebufferScale;
+
+    float x = ceilf(((pos.x - viewport->Pos.x) * scale.x) - 0.5f - 0.01f);
+    float y = ceilf(((pos.y - viewport->Pos.y) * scale.y) - 0.5f - 0.01f);
+
+    return ImVec2(viewport->Pos.x + (x / scale.x), viewport->Pos.y + (y / scale.y));
 }
 
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
@@ -763,39 +786,6 @@ static void draw_sprite_bounding_boxes(const ImVec2& image_pos, const ImVec2& im
 }
 #endif
 
-static void show_status_message(void)
-{
-    if (status_message_active)
-    {
-        Uint64 current_time = SDL_GetTicks();
-        if ((current_time - status_message_start_time) > status_message_duration)
-            status_message_active = false;
-        else
-            ImGui::OpenPopup("Status");
-    }
-
-    if (status_message_active)
-    {
-        ImGui::SetNextWindowPos(ImVec2(0.0f, application_show_menu ? gui_main_menu_height : 0.0f));
-        ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.9f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav;
-
-        if (ImGui::BeginPopup("Status", flags))
-        {
-            ImGui::PushFont(gui_default_font);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.1f,0.9f,0.1f,1.0f));
-            ImGui::TextWrapped("%s", status_message);
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
-            ImGui::EndPopup();
-        }
-
-        ImGui::PopStyleVar();
-    }
-}
-
 static void show_loading_popup(void)
 {
     if (!loading_rom_active)
@@ -845,6 +835,15 @@ static void show_loading_popup(void)
     ImGui::PopStyleVar(3);
 }
 
+static void select_save_slot(int slot)
+{
+    config_emulator.save_slot = slot;
+
+    char message[32];
+    snprintf(message, sizeof(message), "Save slot %d selected", slot + 1);
+    gui_notify(gui_NotificationInfo, ICON_MD_SAVE, message, NULL, "slot", 1500);
+}
+
 static void show_error_window(void)
 {
     if (error_window_active)
@@ -853,8 +852,7 @@ static void show_error_window(void)
         ImGui::OpenPopup("Error");
     }
 
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    gui_center_next_window();
     if (ImGui::BeginPopupModal("Error", NULL, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("%s\n\n", error_message);

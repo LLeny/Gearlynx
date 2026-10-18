@@ -26,10 +26,12 @@
 #include "state_serializer.h"
 #include "lcd_screen.h"
 #include "trace_logger.h"
+#include "input.h"
 
-Mikey::Mikey(Suzy* suzy, Media* media, M6502* m6502, Bus* bus, Random* random)
+Mikey::Mikey(Suzy* suzy, Input* input, Media* media, M6502* m6502, Bus* bus, Random* random)
 {
     m_suzy = suzy;
+    m_input = input;
     m_media = media;
     m_m6502 = m6502;
     m_bus = bus;
@@ -38,6 +40,7 @@ Mikey::Mikey(Suzy* suzy, Media* media, M6502* m6502, Bus* bus, Random* random)
     InitPointer(m_memory);
     InitPointer(m_lcd_screen);
     InitPointer(m_trace_logger);
+    InitPointer(m_profiler);
     m_debug_output_enabled = false;
     m_cpu_read_cycles = 0;
     m_comlynx_publish_callback = NULL;
@@ -100,6 +103,11 @@ void Mikey::SetAudio(Audio* audio)
 void Mikey::SetTraceLogger(TraceLogger* trace_logger)
 {
     m_trace_logger = trace_logger;
+}
+
+void Mikey::SetProfiler(Profiler* profiler)
+{
+    m_profiler = profiler;
 }
 
 void Mikey::SetDebugOutputEnabled(bool enabled)
@@ -228,6 +236,27 @@ void Mikey::LogDisplayEvent(u8 event, u8 reg, u8 raw, int line)
     UNUSED(reg);
     UNUSED(raw);
     UNUSED(line);
+#endif
+}
+
+void Mikey::LogMissedVBlank()
+{
+#if !defined(GLYNX_DISABLE_DISASSEMBLER)
+    u32 misses = m_m6502->UpdateVBlankWatch();
+
+    if (misses == 0)
+        return;
+
+    GLYNX_Trace_Entry entry = {};
+    entry.type = TRACE_MIKEY_DISPLAY;
+    entry.display.event = TRACE_MIKEY_DISPLAY_MISSED_VBLANK;
+    entry.display.address = m_m6502->GetVBlankWatchAddress();
+    entry.display.raw = (m_m6502->GetVBlankWatchAccess(true) ? 0x01 : 0x00) |
+        (m_m6502->GetVBlankWatchAccess(false) ? 0x02 : 0x00);
+    entry.display.auxiliary = (u16)MIN(misses, 0xFFFFU);
+    entry.display.control = m_state.DISPCTL;
+    entry.display.line = (u8)m_lcd_screen->GetState()->current_line;
+    m_trace_logger->TraceLog(entry);
 #endif
 }
 
@@ -831,6 +860,8 @@ void Mikey::HorizontalBlank()
                 m_lcd_screen->ClearLine(line);
             }
         }
+
+        m_state.frame_ready = true;
     }
     // Start of vblank 1
     else if (counter == backup)
@@ -855,7 +886,7 @@ void Mikey::HorizontalBlank()
 #endif
             m_lcd_screen->FirstDMA();
             m_lcd_screen->SetVBlank(false);
-            m_state.frame_ready = true;
+            m_input->ApplyPendingState();
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
             TraceDisplayEvent(TRACE_MIKEY_DISPLAY_VBLANK, 0, 0, visible_line);
             TraceDisplayEvent(TRACE_MIKEY_DISPLAY_FRAME, 0, 0, visible_line);
@@ -871,11 +902,6 @@ void Mikey::HorizontalBlank()
     }
 
     m_lcd_screen->ResetLine(m_video_line_remainder);
-}
-
-bool Mikey::SwitchAudInValue()
-{
-    return IS_SET_BIT(m_state.IODIR, 4) && IS_SET_BIT(m_state.IODAT, 4);
 }
 
 void Mikey::SetComLynxCallbacks(GLYNX_ComLynx_Publish_Callback publish_callback,
@@ -915,11 +941,6 @@ void Mikey::SetComLynxCableConnected(bool connected)
 #endif
 }
 
-bool Mikey::IsComLynxCableConnected() const
-{
-    return m_comlynx_cable_connected;
-}
-
 u64 Mikey::GetComLynxCycle() const
 {
     return m_comlynx_cycle;
@@ -937,13 +958,6 @@ void Mikey::LoadState(std::istream& stream, int version)
 {
     StateSerializer serializer(stream);
     Serialize(serializer, version);
-    m_cpu_read_cycles = 0;
-    m_uart_tx_wire_start = 0;
-    m_uart_tx_wire_bit_cycles = 0;
-    m_uart_tx_wire_bits = 0x07FF;
-    m_uart_tx_wire_published = false;
-    m_uart_rx_wire_state = 0;
-    m_uart_rx_wire_link = false;
     RebuildTimerCaches();
 
     m_lcd_screen->LoadState(stream);
@@ -1092,6 +1106,37 @@ void Mikey::Serialize(StateSerializer& s, int version)
         G_SERIALIZE(s, m_state.MTEST0);
     else if (s.IsLoading())
         m_state.MTEST0 = 0;
+
+    if (version >= 28)
+    {
+        G_SERIALIZE(s, m_cpu_read_cycles);
+        G_SERIALIZE(s, m_comlynx_cycle);
+        G_SERIALIZE(s, m_uart_last_bit_cycle);
+        G_SERIALIZE(s, m_uart_tx_wire_start);
+        G_SERIALIZE(s, m_uart_tx_wire_bit_cycles);
+        G_SERIALIZE(s, m_uart_tx_wire_bits);
+        G_SERIALIZE(s, m_uart_tx_wire_published);
+        G_SERIALIZE(s, m_uart_rx_wire_state);
+        G_SERIALIZE(s, m_uart_rx_wire_bit);
+        G_SERIALIZE(s, m_uart_rx_wire_data);
+        G_SERIALIZE(s, m_uart_rx_wire_parity);
+        G_SERIALIZE(s, m_uart_rx_wire_link);
+    }
+    else if (s.IsLoading())
+    {
+        m_cpu_read_cycles = 0;
+        m_comlynx_cycle = 0;
+        m_uart_last_bit_cycle = 0;
+        m_uart_tx_wire_start = 0;
+        m_uart_tx_wire_bit_cycles = 0;
+        m_uart_tx_wire_bits = 0x07FF;
+        m_uart_tx_wire_published = false;
+        m_uart_rx_wire_state = 0;
+        m_uart_rx_wire_bit = 0;
+        m_uart_rx_wire_data = 0;
+        m_uart_rx_wire_parity = false;
+        m_uart_rx_wire_link = false;
+    }
 }
 
 void Mikey::LogDebugMessageEvent(u16 address, u8 value)

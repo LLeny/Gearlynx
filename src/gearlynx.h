@@ -30,5 +30,6 @@
 #include "suzy.h"
 #include "mikey.h"
 #include "trace_logger.h"
+#include "profiler.h"
 
 #endif /* GEARLYNX_H */

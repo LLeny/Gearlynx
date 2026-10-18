@@ -46,6 +46,15 @@ enum Directory_Location
     Directory_Location_Custom = 2
 };
 
+enum Debug_SCB_Status
+{
+    Debug_SCB_Status_Drawn,
+    Debug_SCB_Status_Skipped,
+    Debug_SCB_Status_Offscreen,
+    Debug_SCB_Status_NoPixels,
+    Debug_SCB_Status_Invalid
+};
+
 struct GLYNX_Debug_SCB_Info
 {
     u16 scb_address;
@@ -69,6 +78,7 @@ struct GLYNX_Debug_SCB_Info
     u16 tilt;
     u8 pen_map[16];
     bool skipped;
+    Debug_SCB_Status status;
     s32 bbox_x;
     s32 bbox_y;
     int bbox_w;
@@ -92,8 +102,10 @@ EXTERN Debug_Command emu_debug_command;
 EXTERN bool emu_debug_pc_changed;
 EXTERN int emu_debug_step_frames_pending;
 EXTERN u64 emu_frame_counter;
+EXTERN bool emu_video_recording_frame_pending;
 
 EXTERN bool emu_audio_sync;
+EXTERN bool emu_audio_rate_control;
 EXTERN bool emu_debug_disable_breakpoints;
 EXTERN bool emu_debug_irq_breakpoints[8];
 
@@ -128,14 +140,14 @@ EXTERN void emu_audio_set_volume(int channel, float volume);
 EXTERN void emu_audio_set_master_volume(float volume);
 EXTERN void emu_audio_set_lowpass_cutoff(float fc);
 EXTERN void emu_audio_reset(void);
-EXTERN bool emu_is_audio_enabled(void);
+EXTERN void emu_audio_restart(void);
 EXTERN bool emu_is_audio_open(void);
 EXTERN void emu_save_ram(const char* file_path);
 EXTERN void emu_load_ram(const char* file_path);
-EXTERN void emu_save_state_slot(int index);
-EXTERN void emu_load_state_slot(int index);
-EXTERN void emu_save_state_file(const char* file_path);
-EXTERN void emu_load_state_file(const char* file_path);
+EXTERN bool emu_save_state_slot(int index);
+EXTERN bool emu_load_state_slot(int index);
+EXTERN bool emu_save_state_file(const char* file_path);
+EXTERN bool emu_load_state_file(const char* file_path);
 EXTERN void update_savestates_data(void);
 EXTERN void emu_get_runtime(GLYNX_Runtime_Info& runtime);
 EXTERN double emu_get_frame_rate(void);
@@ -150,14 +162,17 @@ EXTERN void emu_debug_state_restored(void);
 EXTERN void emu_debug_break(void);
 EXTERN void emu_debug_continue(void);
 EXTERN void emu_set_disassembler_syntax(int syntax);
-EXTERN void emu_save_screenshot(const char* file_path);
-EXTERN void emu_save_sprite(const char* file_path, int index);
+EXTERN bool emu_save_screenshot(const char* file_path);
+EXTERN bool emu_save_sprite(const char* file_path, int index);
 EXTERN int emu_get_sprite_png(int index, unsigned char** out_buffer);
 EXTERN int emu_get_screenshot_png(unsigned char** out_buffer);
 EXTERN int emu_get_framebuffer_png(int buffer_index, unsigned char** out_buffer);
-EXTERN void emu_start_vgm_recording(const char* file_path);
+EXTERN bool emu_start_vgm_recording(const char* file_path);
 EXTERN void emu_stop_vgm_recording(void);
 EXTERN bool emu_is_vgm_recording(void);
+EXTERN bool emu_start_video_recording(const char* file_path);
+EXTERN void emu_stop_video_recording(void);
+EXTERN bool emu_is_video_recording(void);
 EXTERN void emu_mcp_set_transport(int mode, int tcp_port, const char* tcp_address);
 EXTERN void emu_mcp_start(void);
 EXTERN void emu_mcp_stop(void);
@@ -175,7 +190,6 @@ EXTERN ComLynxStatus emu_comlynx_get_status(void);
 EXTERN void emu_comlynx_reset_metrics(void);
 EXTERN void emu_comlynx_set_normal_barrier_stall_us(u32 stall_us);
 EXTERN void emu_debug_monitor_start(int port);
-EXTERN void emu_debug_monitor_stop(void);
 EXTERN bool emu_debug_monitor_is_running(void);
 EXTERN int emu_debug_monitor_get_port(void);
 EXTERN const char* emu_debug_monitor_get_address(void);

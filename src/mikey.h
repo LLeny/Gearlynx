@@ -31,11 +31,13 @@ class Media;
 class Memory;
 class M6502;
 class Suzy;
+class Input;
 class Audio;
 class Bus;
 class LcdScreen;
 class StateSerializer;
 class TraceLogger;
+class Profiler;
 struct GLYNX_Trace_Entry;
 enum GLYNX_Trace_Type : u8;
 
@@ -79,7 +81,7 @@ public:
     };
 
 public:
-    Mikey(Suzy* suzy, Media* media, M6502* m6502, Bus* bus, Random* random);
+    Mikey(Suzy* suzy, Input* input, Media* media, M6502* m6502, Bus* bus, Random* random);
     ~Mikey();
     void Init(Memory* memory, GLYNX_Pixel_Format pixel_format);
     void SetAudio(Audio* audio);
@@ -90,9 +92,9 @@ public:
     bool IsPoweredOn();
     Mikey_State* GetState();
     LcdScreen* GetLcdScreen();
-    bool SwitchAudInValue();
     void SetSuzyDone();
     void SetTraceLogger(TraceLogger* trace_logger);
+    void SetProfiler(Profiler* profiler);
     void SetDebugOutputEnabled(bool enabled);
     bool IsDebugOutputEnabled();
     void SaveState(std::ostream& stream);
@@ -103,7 +105,6 @@ public:
     void SetComLynxTurboCallbacks(GLYNX_ComLynx_Turbo_Sample_Callback sample_callback,
         GLYNX_ComLynx_Turbo_Sync_Callback sync_callback, void* user_data);
     void SetComLynxCableConnected(bool connected);
-    bool IsComLynxCableConnected() const;
     bool IsUartTurbo() const;
     u32 GetUartBitCycles() const;
     u32 GetComLynxSyncCycles() const;
@@ -175,6 +176,7 @@ private:
     INLINE void TraceTimerEvent(u8 event, int timer, u8 reg = 0, u8 raw = 0);
     INLINE void TraceInterruptEvent(u8 event, u8 reg = 0, u8 raw = 0);
     INLINE void TraceDisplayEvent(u8 event, u8 reg = 0, u8 raw = 0, int line = -1);
+    INLINE void TraceMissedVBlank();
     INLINE void TracePaletteEvent(u8 index, u8 raw, u16 rgb444);
     INLINE void TraceAudioEvent(u8 event, int channel, u8 reg, u8 raw);
     INLINE void TraceUARTEvent(u8 event, u8 data = 0, u8 flags = 0, u8 source = 0,
@@ -186,6 +188,7 @@ private:
     void LogTimerEvent(u8 event, int timer, u8 reg, u8 raw);
     void LogInterruptEvent(u8 event, u8 reg, u8 raw);
     void LogDisplayEvent(u8 event, u8 reg, u8 raw, int line);
+    void LogMissedVBlank();
     void LogPaletteEvent(u8 index, u8 raw, u16 rgb444);
     void LogAudioEvent(u8 event, int channel, u8 reg, u8 raw);
     void LogUARTEvent(u8 event, u8 data, u8 flags, u8 source,
@@ -204,6 +207,7 @@ private:
     Media* m_media;
     Memory* m_memory;
     Suzy* m_suzy;
+    Input* m_input;
     M6502* m_m6502;
     Audio* m_audio;
     Bus* m_bus;
@@ -213,6 +217,7 @@ private:
     bool m_is_lynx2;
     bool m_debug_output_enabled;
     TraceLogger* m_trace_logger;
+    Profiler* m_profiler;
     u32 m_cpu_read_cycles;
     GLYNX_ComLynx_Publish_Callback m_comlynx_publish_callback;
     GLYNX_ComLynx_Sample_Callback m_comlynx_sample_callback;
