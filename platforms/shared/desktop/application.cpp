@@ -150,6 +150,9 @@ int application_init(const ApplicationParams& params)
         gui_debug_load_symbols_file(params.symbol_file);
     }
 
+    if ((params.state_slot > 0) || IsValidPointer(params.state_file))
+        gui_load_state_after_media(params.state_slot, params.state_file);
+
     if (params.mcp_mode >= 0)
     {
         const char* mcp_http_address = params.mcp_http_address.empty() ? "127.0.0.1" : params.mcp_http_address.c_str();
@@ -594,14 +597,14 @@ static void sdl_events_app(const SDL_Event* event)
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
         {
             display_use_vsync_if_enabled();
-            if (config_emulator.pause_when_inactive && !paused_when_focus_lost)
+            if (config_emulator.pause_when_inactive && !emu_mcp_is_running() && !paused_when_focus_lost)
                 emu_resume();
             break;
         }
         case SDL_EVENT_WINDOW_FOCUS_LOST:
         {
             display_disable_vsync();
-            if (config_emulator.pause_when_inactive && !emu_comlynx_is_active())
+            if (config_emulator.pause_when_inactive && !emu_comlynx_is_active() && !emu_mcp_is_running())
             {
                 paused_when_focus_lost = emu_is_paused();
                 emu_pause();
@@ -664,7 +667,11 @@ static void run_emulator(void)
     config_emulator.paused = emu_is_paused();
     emu_audio_sync = config_audio.sync;
     emu_audio_rate_control = display_is_vsync_pacing();
+    emu_audio_ratio = display_get_audio_ratio();
     emu_update();
+
+    if (display_should_run_catch_up_frame())
+        emu_update();
 
     display_update_vsync_state();
 }

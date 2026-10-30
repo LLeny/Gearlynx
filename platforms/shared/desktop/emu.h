@@ -106,6 +106,7 @@ EXTERN bool emu_video_recording_frame_pending;
 
 EXTERN bool emu_audio_sync;
 EXTERN bool emu_audio_rate_control;
+EXTERN float emu_audio_ratio;
 EXTERN bool emu_debug_disable_breakpoints;
 EXTERN bool emu_debug_irq_breakpoints[8];
 
@@ -150,6 +151,8 @@ EXTERN bool emu_save_state_file(const char* file_path);
 EXTERN bool emu_load_state_file(const char* file_path);
 EXTERN void update_savestates_data(void);
 EXTERN void emu_get_runtime(GLYNX_Runtime_Info& runtime);
+EXTERN bool emu_add_cheat(const char* cheat);
+EXTERN void emu_clear_cheats(void);
 EXTERN double emu_get_frame_rate(void);
 EXTERN void emu_get_info(char* info, int buffer_size);
 EXTERN GearlynxCore* emu_get_core(void);

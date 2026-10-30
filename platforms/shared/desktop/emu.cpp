@@ -141,6 +141,7 @@ bool emu_init(void)
 
     emu_audio_sync = true;
     emu_audio_rate_control = false;
+    emu_audio_ratio = 1.0f;
     emu_debug_disable_breakpoints = false;
     emu_debug_command = Debug_Command_None;
     emu_debug_pc_changed = false;
@@ -190,7 +191,7 @@ void emu_destroy(void)
 
 bool emu_load_rom(const char* file_path)
 {
-    gui_debug_trace_logger_reset();
+    gui_debug_trace_logger_reset("media_change");
     emu_debug_command = Debug_Command_None;
     reset_buffers();
     reset_debug();
@@ -224,7 +225,7 @@ void emu_load_rom_async(const char* file_path)
     if (loading_state.load() != Loading_State_None)
         return;
 
-    gui_debug_trace_logger_reset();
+    gui_debug_trace_logger_reset("media_change");
 
     emu_debug_command = Debug_Command_None;
     reset_buffers();
@@ -427,7 +428,7 @@ void emu_update(void)
     {
         bool sync_audio = emu_audio_sync &&
             (!emu_comlynx_is_active() || comlynx_manager->IsPacingPeer());
-        sound_queue_write(audio_buffer, sampleCount, sync_audio, emu_audio_rate_control);
+        sound_queue_write(audio_buffer, sampleCount, sync_audio, emu_audio_rate_control, emu_audio_ratio);
     }
     else if (core->IsPaused())
     {
@@ -597,7 +598,7 @@ void emu_save_persistent_data(void)
 
 void emu_reset(bool save_persistent_data)
 {
-    gui_debug_trace_logger_reset();
+    gui_debug_trace_logger_reset("reset");
     emu_debug_command = Debug_Command_None;
     emu_debug_step_frames_pending = 0;
     emu_debug_pc_changed = true;
@@ -770,7 +771,7 @@ void emu_load_ram(const char* file_path)
 {
     if (!emu_is_empty())
     {
-        gui_debug_trace_logger_reset();
+        gui_debug_trace_logger_reset("media_change");
         emu_comlynx_stop();
         save_ram();
         core->ResetROM(false);
@@ -867,6 +868,22 @@ void update_savestates_data(void)
     }
 }
 
+
+bool emu_add_cheat(const char* cheat)
+{
+    if (emu_is_rom_loading())
+        return false;
+
+    return core->SetCheat(cheat);
+}
+
+void emu_clear_cheats(void)
+{
+    if (emu_is_rom_loading())
+        return;
+
+    core->ClearCheats();
+}
 
 void emu_get_runtime(GLYNX_Runtime_Info& runtime)
 {

@@ -4,9 +4,9 @@
 
 ## Prerequisites
 
-All skills require the **Gearlynx emulator** running as an MCP server. The emulator must be configured in your AI client (VS Code, Claude Desktop, Claude Code, etc.) so the agent can access the MCP tools.
+All skills require the **Gearlynx emulator** running as an MCP server. The emulator must be configured in your AI client (Claude Code, Codex, etc.) so the agent can access the MCP tools.
 
-See [MCP_README.md](../MCP_README.md) for complete setup instructions (STDIO, HTTP, VS Code, Claude Desktop, Claude Code).
+See [MCP_README.md](../MCP_README.md) for complete setup instructions (STDIO, HTTP, Claude Code, Codex).
 
 ## Installation
 
@@ -64,7 +64,7 @@ This downloads and configures the skills for use with your AI agent. See the [sk
 - Save state management for safe experimentation
 - Fast forwarding to reach specific game states
 
-**Key MCP tools used**: `memory_search_capture`, `memory_search`, `memory_find`, `read_memory`, `write_memory`, `set_breakpoint` (write type), `add_memory_watch`, `add_memory_bookmark`, `save_state`, `load_state`, `toggle_fast_forward`, `get_screenshot`, `get_frame_buffer`, `controller_button`
+**Key MCP tools used**: `memory_search_capture`, `memory_search`, `memory_find`, `read_memory`, `write_memory`, `set_breakpoint` (write type), `add_memory_watch`, `add_memory_bookmark`, `add_cheat`, `list_cheats`, `save_state`, `load_state`, `toggle_fast_forward`, `get_screenshot`, `get_frame_buffer`, `controller_button`
 
 **Example prompts**:
 - "Find the lives counter and give me infinite lives"
