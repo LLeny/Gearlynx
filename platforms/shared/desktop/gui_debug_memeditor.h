@@ -93,6 +93,7 @@ public:
     void BookMarkPopup();
     void WatchPopup();
     void DrawFindBytesWindow();
+    bool ConsumeShowRequest();
     void SaveSettings(std::ostream& stream);
     Options GetOptions() const;
     void SetOptions(const Options& options);
@@ -112,6 +113,7 @@ private:
     void DrawSelectionBackground(int x, int address, ImVec2 cellPos, ImVec2 cellSize);
     void DrawSelectionAsciiBackground(int address, ImVec2 cellPos, ImVec2 cellSize);
     void DrawSelectionFrame(int x, int y, int address, ImVec2 cellPos, ImVec2 cellSize);
+    void DrawFrameRect(ImVec2 minimum, ImVec2 maximum, ImU32 color);
     void HandleSelection(int address, int row);
     void DrawCursors();
     void DrawOptions();
@@ -189,6 +191,7 @@ private:
     int m_find_bytes_last_address;
     int m_find_bytes_pattern_len;
     std::vector<int> m_find_bytes_results;
+    bool m_show_request;
 };
 
 #endif /* GUI_DEBUG_MEMEDITOR_H */

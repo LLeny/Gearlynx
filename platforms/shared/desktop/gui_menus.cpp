@@ -1351,14 +1351,30 @@ static void menu_debug(void)
 
         ImGui::Separator();
 
-        if (ImGui::BeginMenu("Font Size", config_debug.debug))
+        if (ImGui::BeginMenu("Font", config_debug.debug))
         {
-            ImGui::PushItemWidth(110.0f);
-            if (ImGui::Combo("##font", &config_debug.font_size, "Very Small\0Small\0Medium\0Large\0\0"))
+            if (ImGui::BeginMenu("Type"))
             {
-                gui_default_font = gui_default_fonts[config_debug.font_size];
+                ImGui::PushItemWidth(140.0f);
+                if (ImGui::Combo("##font_type", &config_debug.font_type, "ProggyForever\0ProggyClean\0\0"))
+                {
+                    gui_default_font = gui_default_fonts[config_debug.font_type][config_debug.font_size];
+                }
+                ImGui::PopItemWidth();
+                ImGui::EndMenu();
             }
-            ImGui::PopItemWidth();
+
+            if (ImGui::BeginMenu("Size"))
+            {
+                ImGui::PushItemWidth(110.0f);
+                if (ImGui::Combo("##font_size", &config_debug.font_size, "Small\0Medium\0Big\0Large\0\0"))
+                {
+                    gui_default_font = gui_default_fonts[config_debug.font_type][config_debug.font_size];
+                }
+                ImGui::PopItemWidth();
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMenu();
         }
 
@@ -1778,21 +1794,27 @@ static void gamepad_device_selector(void)
     items.reserve(4096);
     items.append("<None>");
     items.push_back('\0');
+    float text_width = ImGui::CalcTextSize("<None>").x;
 
     for (int i = 0; i < info.count; i++)
     {
         items.append(info.labels[i]);
         items.push_back('\0');
+        text_width = MAX(text_width, ImGui::CalcTextSize(info.labels[i]).x);
     }
     items.push_back('\0');
 
     int selected = (info.current_index >= 0) ? info.current_index + 1 : 0;
+
+    ImGui::PushItemWidth(text_width + (ImGui::GetStyle().FramePadding.x * 2.0f) + ImGui::GetFrameHeight());
 
     if (ImGui::Combo("##device_player", &selected, items.c_str()))
     {
         SDL_JoystickID instance_id = (selected > 0) ? info.ids[selected - 1] : 0;
         gamepad_assign(instance_id);
     }
+
+    ImGui::PopItemWidth();
 }
 
 static void draw_savestate_slot_info(int slot)

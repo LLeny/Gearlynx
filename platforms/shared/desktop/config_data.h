@@ -24,7 +24,15 @@
 #include <string>
 #include "gearlynx.h"
 
-static const int config_version = 7;
+#if defined(__APPLE__)
+#define CONFIG_PRIMARY_KMOD SDL_KMOD_GUI
+#define CONFIG_PRIMARY_LABEL "Cmd+"
+#else
+#define CONFIG_PRIMARY_KMOD SDL_KMOD_CTRL
+#define CONFIG_PRIMARY_LABEL "Ctrl+"
+#endif
+
+static const int config_version = 8;
 static const int config_minimum_version = 2;
 static const int config_max_recent_roms = 15;
 static const int config_memory_editor_count = 9;
@@ -316,6 +324,7 @@ struct config_Debug
     bool pause_on_brk;
     int pause_on_brk_value;
     bool pause_on_brk_trigger_irq;
+    int font_type;
     int font_size;
     int scale;
     bool multi_viewport;

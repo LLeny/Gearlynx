@@ -122,7 +122,6 @@ void gui_debug_window_memory(void)
     for (int i = 0; i < MEMORY_EDITOR_MAX; i++)
     {
         mem_edit[i].SetGuiFont(gui_roboto_font);
-        mem_edit[i].WatchPopup();
         mem_edit[i].BookMarkPopup();
     }
 
@@ -161,6 +160,12 @@ void gui_debug_memory_find_bytes_window(void)
         ImGui::PushFont(gui_default_font);
         mem_edit[i].DrawFindBytesWindow();
         ImGui::PopFont();
+
+        if (mem_edit[i].ConsumeShowRequest())
+        {
+            config_debug.show_memory = true;
+            mem_edit_select = i;
+        }
     }
 }
 
@@ -169,6 +174,7 @@ void gui_debug_memory_watches_window(void)
     for (int i = 0; i < MEMORY_EDITOR_MAX; i++)
     {
         mem_edit[i].SetGuiFont(gui_roboto_font);
+        mem_edit[i].WatchPopup();
         ImGui::PushFont(gui_default_font);
         mem_edit[i].DrawWatchWindow();
         ImGui::PopFont();
@@ -200,6 +206,7 @@ void gui_debug_memory_select_all(void)
 
 void gui_debug_memory_goto(int editor, int address)
 {
+    config_debug.show_memory = true;
     mem_edit_select = editor;
     mem_edit[mem_edit_select].JumpToAddress(address);
 }
@@ -270,12 +277,12 @@ static void memory_editor_menu(void)
 
     if (ImGui::BeginMenu("Edit"))
     {
-        if (ImGui::MenuItem("Copy", "Ctrl+C"))
+        if (ImGui::MenuItem("Copy", CONFIG_PRIMARY_LABEL "C"))
         {
             gui_debug_memory_copy();
         }
 
-        if (ImGui::MenuItem("Paste", "Ctrl+V"))
+        if (ImGui::MenuItem("Paste", CONFIG_PRIMARY_LABEL "V"))
         {
             gui_debug_memory_paste();
         }
@@ -285,7 +292,7 @@ static void memory_editor_menu(void)
 
     if (ImGui::BeginMenu("Selection"))
     {
-        if (ImGui::MenuItem("Select All", "Ctrl+A"))
+        if (ImGui::MenuItem("Select All", CONFIG_PRIMARY_LABEL "A"))
         {
             mem_edit[current_mem_edit].SelectAll();
         }
@@ -417,6 +424,7 @@ bool gui_debug_memory_select_range(int editor, int start_address, int end_addres
     if (!mem_edit[editor].SetSelection(start_address, end_address))
         return false;
 
+    config_debug.show_memory = true;
     mem_edit_select = editor;
     mem_edit[editor].ScrollToAddress(start_address);
 

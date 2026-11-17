@@ -19,6 +19,7 @@
 
 #include <math.h>
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "implot.h"
 #include "fonts/RobotoMedium.h"
 #include "fonts/MaterialIcons.h"
@@ -58,7 +59,6 @@ static void select_save_slot(int slot);
 static bool finish_loading_rom(void);
 static void load_pending_state(void);
 static void update_window_visibility_padding(void);
-static ImVec2 snap_to_physical_pixel(const ImVec2& pos);
 #if !defined(GLYNX_DISABLE_DISASSEMBLER)
 static ImU32 sprite_bounding_box_color(void);
 static void draw_sprite_bounding_boxes(const ImVec2& image_pos, const ImVec2& image_size);
@@ -104,7 +104,10 @@ bool gui_init(void)
     for (int i = 0; i < 4; i++)
     {
         font_cfg.SizePixels = (13.0f + (i * 3));
-        gui_default_fonts[i] = io.Fonts->AddFontDefault(&font_cfg);
+        font_cfg.GlyphMinAdvanceX = font_cfg.SizePixels * 7.0f / 13.0f;
+        font_cfg.GlyphMaxAdvanceX = font_cfg.GlyphMinAdvanceX;
+        gui_default_fonts[0][i] = io.Fonts->AddFontDefaultVector(&font_cfg);
+        gui_default_fonts[1][i] = io.Fonts->AddFontDefaultBitmap(&font_cfg);
     }
 
     gui_apply_settings();
@@ -121,7 +124,7 @@ bool gui_init(void)
 
 void gui_apply_settings(void)
 {
-    gui_default_font = gui_default_fonts[config_debug.font_size];
+    gui_default_font = gui_default_fonts[config_debug.font_type][config_debug.font_size];
 
     set_style();
 
@@ -488,6 +491,21 @@ void gui_center_next_window(void)
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 }
 
+bool gui_has_open_window(void)
+{
+    ImGuiContext* context = ImGui::GetCurrentContext();
+
+    for (int i = 0; i < context->Windows.Size; i++)
+    {
+        ImGuiWindow* window = context->Windows[i];
+
+        if (window->Active && (window->Flags & ImGuiWindowFlags_NoTitleBar) == 0)
+            return true;
+    }
+
+    return false;
+}
+
 void gui_set_style(void)
 {
     set_style();
@@ -684,7 +702,7 @@ static void main_window(void)
 
     ImVec2 image_size(image_w, image_h);
     ImVec2 layout_max = ImGui::GetCursorScreenPos() + image_size;
-    ImVec2 image_min = snap_to_physical_pixel(ImGui::GetCursorScreenPos());
+    ImVec2 image_min = gui_snap_to_physical_pixel(ImGui::GetCursorScreenPos());
     ImVec2 image_max = image_min + image_size;
 
     ImGui::Dummy(image_size);
@@ -722,7 +740,7 @@ static void main_window(void)
     ImGui::PopStyleVar();
 }
 
-static ImVec2 snap_to_physical_pixel(const ImVec2& pos)
+ImVec2 gui_snap_to_physical_pixel(const ImVec2& pos)
 {
     ImGuiViewport* viewport = ImGui::GetWindowViewport();
     ImVec2 scale = viewport->FramebufferScale;
@@ -802,7 +820,7 @@ static void draw_sprite_bounding_boxes(const ImVec2& image_pos, const ImVec2& im
 
         ImVec2 rect_min(image_pos.x + x0 * scale_x, image_pos.y + y0 * scale_y);
         ImVec2 rect_max(image_pos.x + x1 * scale_x, image_pos.y + y1 * scale_y);
-        draw_list->AddRect(rect_min, rect_max, color, 0.0f, 0, 1.0f);
+        draw_list->AddRect(rect_min, rect_max, color, 0.0f, 1.0f);
     }
 }
 #endif
